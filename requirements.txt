@@ -1,0 +1,7 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+python-multipart>=0.0.20
+numpy>=2,<3
+piper-tts[train]>=1.8,<2
+faster-whisper>=1.1,<2
+laya>=0.3,<1

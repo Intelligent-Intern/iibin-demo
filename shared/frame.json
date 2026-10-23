@@ -1,0 +1,101 @@
+{
+  "id": {
+    "id": 1,
+    "type": "string"
+  },
+  "op": {
+    "id": 2,
+    "type": "string"
+  },
+  "tid": {
+    "id": 3,
+    "type": "string"
+  },
+  "text": {
+    "id": 4,
+    "type": "string"
+  },
+  "rows": {
+    "id": 5,
+    "type": "message",
+    "repeated": true,
+    "schema": {
+      "id": {
+        "id": 1,
+        "type": "string"
+      },
+      "kind": {
+        "id": 2,
+        "type": "string"
+      },
+      "title": {
+        "id": 3,
+        "type": "string"
+      },
+      "text": {
+        "id": 4,
+        "type": "string"
+      },
+      "state": {
+        "id": 5,
+        "type": "string"
+      },
+      "created": {
+        "id": 6,
+        "type": "string"
+      },
+      "audio": {
+        "id": 7,
+        "type": "bytes"
+      },
+      "values": {
+        "id": 8,
+        "type": "message",
+        "repeated": true,
+        "schema": {
+          "key": {
+            "id": 1,
+            "type": "string"
+          },
+          "text": {
+            "id": 2,
+            "type": "string"
+          },
+          "number": {
+            "id": 3,
+            "type": "double"
+          },
+          "flag": {
+            "id": 4,
+            "type": "bool"
+          }
+        }
+      }
+    }
+  },
+  "audio": {
+    "id": 6,
+    "type": "bytes"
+  },
+  "error": {
+    "id": 7,
+    "type": "string"
+  },
+  "state": {
+    "id": 8,
+    "type": "string"
+  },
+  "voice": {
+    "id": 9,
+    "type": "string"
+  },
+  "elapsed": {
+    "id": 10,
+    "type": "double"
+  },
+  "actions": {
+    "id": 11,
+    "type": "string",
+    "repeated": true
+  }
+}

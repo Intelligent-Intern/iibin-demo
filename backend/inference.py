@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import re
 import threading
 import time
 import urllib.request
@@ -103,7 +104,30 @@ ACTIONS = {
 }
 
 
+def machine_command(text):
+    text=text.casefold().replace('ä','ae').replace('ö','oe').replace('ü','ue')
+    # Knowledge questions remain classifier input; requests such as "kannst du" are commands.
+    if re.search(r'\b(wie|warum|wann|wieso|weshalb|erklaer\w*)\b|\b(kann|darf|soll|muss) ich\b',text):return None
+    machine=bool(re.search(r'\b(ventil|pruefung|prueflauf|pruefzyklus|druckpruefung|test|schutzhaube|schutzklappe|haube|klappe)\b',text))
+    if machine and re.search(r'\b(nicht|kein\w*|ohne)\b',text):return 'fallback'
+    test=bool(re.search(r'\b(pruefung|prueflauf|pruefzyklus|druckpruefung|test)\b',text))
+    if (test and re.search(r'\b(abbrech\w*|abbruch|stopp?\w*|beend\w*)\b',text)) or text.strip(' .!?') in {'stop','stopp','abbrechen'}:return 'machine_abort'
+    start=test and bool(re.search(r'\b(start\w*|beginn\w*|los)\b',text))
+    guard=bool(re.search(r'\b(schutzhaube|schutzklappe|haube|klappe)\b',text))
+    close=guard and bool(re.search(r'\b(schliess\w*|zu|zumachen)\b',text))
+    if close and start:return 'machine_close_start'
+    if close:return 'machine_guard_close'
+    if guard and re.search(r'\b(oeffn\w*|auf|aufmachen|geoeffnet)\b',text):return 'machine_guard_open'
+    if re.search(r'\bventil\b',text):
+        if re.search(r'\b(eingelegt|einleg\w*|eingesetzt|einsetz\w*)\b',text):return 'machine_insert'
+        if re.search(r'\b(entnehm\w*|entnommen|herausnehm\w*|herausgenommen|rausnehm\w*)\b',text):return 'machine_remove'
+    if start:return 'machine_start'
+    return None
+
+
 def decide(text):
+    command=machine_command(text)
+    if command:return command
     if agent is None:raise RuntimeError('Laya wird noch vorbereitet. Den Status findest du in der Verwaltung.')
     with db() as c:faqs=c.execute('SELECT * FROM faq').fetchall()
     criteria={**ACTIONS,**{r['id']:r['question'] for r in faqs}}

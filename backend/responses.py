@@ -110,7 +110,7 @@ async def model_sentences(model):
             asyncio.get_running_loop().run_in_executor(None,model.cancel)
 
 
-async def sentence_audio(output, source, filler):
+async def sentence_audio(output, source):
     queue=asyncio.Queue(maxsize=3);slots=asyncio.Semaphore(3);jobs=set()
     async def produce():
         try:
@@ -126,11 +126,6 @@ async def sentence_audio(output, source, filler):
         else:await queue.put(None)
     producer=asyncio.create_task(produce())
     try:
-        if filler:
-            try:await filler
-            except Exception:
-                import logging
-                logging.getLogger('shopfloor').exception('Thinking audio unavailable')
         while True:
             job=await queue.get()
             if job is None:break
@@ -141,7 +136,6 @@ async def sentence_audio(output, source, filler):
     finally:
         producer.cancel()
         for job in jobs:job.cancel()
-        if filler and not filler.done():filler.cancel()
         with contextlib.suppress(asyncio.CancelledError):await producer
         with contextlib.suppress(Exception):await source.aclose()
 
@@ -154,15 +148,7 @@ async def reply(packet,send):
     await send({'op':'message.accepted','tid':tid,'rows':[{'id':uid,'kind':'user','text':text}]})
     context=machine_context(packet);voice=audio.active_voice();output=Output(tid,voice,send)
     decision=asyncio.create_task(asyncio.to_thread(inference.decide,text,context,history))
-    filler=None
-    async def thinking():
-        variant=audio.choose(tid,'thinking',voice)
-        if not variant:variant=await asyncio.to_thread(audio.create_variant,'thinking',voice)
-        await output.wav(Path(variant['path']).read_bytes(),keep=False)
     try:
-        done,_=await asyncio.wait({decision},timeout=.45)
-        if not done:
-            await output.update('');filler=asyncio.create_task(thinking())
         category,action=interlock(await decision,context);output.category=category
         dynamic=None
         if category=='protocol_summary':
@@ -177,7 +163,6 @@ async def reply(packet,send):
             dynamic='Der aktuelle Prüfdruck beträgt '+format(context['pressure'],'.2f').replace('.',',')+' bar.'
         if category=='fallback' or category.startswith('faq_') and not audio.choose(tid,category,voice):
             if not output.mid:await output.update('')
-            if filler is None:filler=asyncio.create_task(thinking())
             facts={'machine':context,'protocols':protocols()}
             related=inference.relevant_faq(text)
             related=[{'question':row['question'],'answer':row['answer']} for row in related[:2] if row['match']>.25]
@@ -186,21 +171,20 @@ async def reply(packet,send):
                 with db() as c:faq=c.execute('SELECT question,answer FROM faq WHERE id=?',(category,)).fetchone()
                 if faq:facts['faq']=dict(faq)
             output.category='conversation' if category=='fallback' else 'generated:'+category
-            await sentence_audio(output,model_sentences(inference.AnswerStream(text,facts,history)),filler)
+            await sentence_audio(output,model_sentences(inference.AnswerStream(text,facts,history)))
         elif dynamic is not None:
             output.category='live:'+category
-            await sentence_audio(output,static_sentences(dynamic),filler)
+            await sentence_audio(output,static_sentences(dynamic))
         else:
             variant=audio.choose(tid,category,voice)
             answer=variant['text'] if variant else audio.canonical(category)
             await output.update(answer,action)
             if variant:
                 output.variant=variant
-                if filler:await filler
                 await output.wav(Path(variant['path']).read_bytes())
-            else:await sentence_audio(output,static_sentences(answer),filler)
+            else:await sentence_audio(output,static_sentences(answer))
         if not output.text:
-            await sentence_audio(output,static_sentences('Was möchtest du wissen oder am Prüfstand tun?'),None)
+            await sentence_audio(output,static_sentences('Was möchtest du wissen oder am Prüfstand tun?'))
         await output.finish()
         return {'state':'done'}
     except Exception:
@@ -208,6 +192,3 @@ async def reply(packet,send):
         raise
     finally:
         decision.cancel()
-        if filler and not filler.done():
-            filler.cancel()
-            with contextlib.suppress(asyncio.CancelledError):await filler

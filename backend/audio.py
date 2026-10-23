@@ -8,7 +8,6 @@ from . import inference
 from .store import VAR, db
 
 BASE = {
-'thinking':'Einen kleinen Moment, dazu muss ich kurz nachdenken.',
 'greeting':'Hallo! Ich unterstütze dich bei der Ventilprüfung. Was möchtest du wissen oder tun?',
 'fallback':'Ich kann dir bei der Ventilprüfung helfen, Fragen zum Prüfablauf beantworten und Prüfprotokolle öffnen. Was möchtest du tun?',
 'nav_machine':'Ich öffne die Ventilprüfung.', 'nav_dashboard':'Hier ist die Übersicht.',

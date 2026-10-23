@@ -121,8 +121,20 @@ def synthesize(text, voice_id, output):
 
 def transcribe(audio):
     if recognizer is None:raise RuntimeError('Die Spracherkennung wird noch vorbereitet.')
+    import numpy as np
+    import subprocess
+    try:
+        with wave.open(io.BytesIO(audio), 'rb') as wav:
+            if wav.getnchannels()!=1 or wav.getsampwidth()!=2 or wav.getframerate()!=16000:
+                raise ValueError('PCM normalization required')
+            pcm=wav.readframes(16000*30)
+    except (wave.Error, EOFError, ValueError):
+        pcm=subprocess.run(['ffmpeg','-v','error','-i','pipe:0','-f','s16le','-ac','1','-ar','16000','-t','30','pipe:1'],input=audio,capture_output=True,check=True,timeout=15).stdout
+    samples=np.frombuffer(pcm,dtype='<i2').astype(np.float32)/32768
+    if not samples.size:return ''
     with _stt_lock:
-        segments,info=recognizer.transcribe(io.BytesIO(audio),language='de',beam_size=1,vad_filter=True)
+        # Supplying samples bypasses the incompatible PyAV file decoder entirely.
+        segments,info=recognizer.transcribe(samples,language='de',beam_size=1,vad_filter=True)
         return ' '.join(s.text.strip() for s in segments).strip()
 
 
@@ -149,8 +161,12 @@ def paraphrase(text, existing, category):
             'messages':[{'role':'system','content':'Wähle eine kurze, natürliche Antwort aus der vorgegebenen Liste. Verändere keinen Text. Antworte ausschließlich mit dem JSON-Objekt mit dem gewählten Index.'},
                         {'role':'user','content':json.dumps({'answers':options},ensure_ascii=False)}],
             'options':{'num_predict':30,'temperature':.3,'num_ctx':2048,'num_gpu':0,'num_thread':int(os.getenv('CPU_THREADS','4'))}})
-        index=json.loads(r['message']['content'])['index']
-        if type(index) is not int or not 0<=index<len(options):raise RuntimeError('Ungültige Auswahl der Antwortvariante')
+        try:
+            result=json.loads(r['message']['content'])
+            index=result.get('index') if isinstance(result,dict) else None
+        except (KeyError,TypeError,json.JSONDecodeError):index=None
+        # Invalid selection cannot change the wording or stall the cache worker.
+        if type(index) is not int or not 0<=index<len(options):index=0
         status['qwen']='ready'
         return options[index]
     except Exception as e:

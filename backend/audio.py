@@ -43,6 +43,10 @@ def choose(tid,category,voice):
         r=c.execute('''SELECT v.* FROM answer_variant v WHERE category=? AND voice_id=?
         AND NOT EXISTS(SELECT 1 FROM playback p WHERE p.thread_id=? AND p.variant_id=v.id)
         ORDER BY created,id LIMIT 1''',(category,voice,tid)).fetchone()
+        if not r:
+            # Exhausting the reviewed wording pool must not leave voice mode silent.
+            r=c.execute('''SELECT v.* FROM answer_variant v JOIN playback p ON p.variant_id=v.id
+            WHERE v.category=? AND v.voice_id=? AND p.thread_id=? ORDER BY p.created,v.id LIMIT 1''',(category,voice,tid)).fetchone()
         return dict(r) if r else None
 
 
@@ -73,7 +77,7 @@ def acknowledge(tid,variant):
     with db() as c:
         v=c.execute('SELECT * FROM answer_variant WHERE id=?',(variant,)).fetchone()
         if not v:raise ValueError('Unbekannte Audiodatei')
-        c.execute('INSERT OR IGNORE INTO playback(thread_id,variant_id) VALUES(?,?)',(tid,variant))
+        c.execute('INSERT INTO playback(thread_id,variant_id) VALUES(?,?) ON CONFLICT(thread_id,variant_id) DO UPDATE SET created=CURRENT_TIMESTAMP',(tid,variant))
     enqueue(v['category'],v['voice_id'])
 
 

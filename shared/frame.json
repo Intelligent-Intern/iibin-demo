@@ -97,5 +97,17 @@
     "id": 11,
     "type": "string",
     "repeated": true
+  },
+  "stream": {
+    "id": 12,
+    "type": "string"
+  },
+  "rate": {
+    "id": 13,
+    "type": "uint32"
+  },
+  "turn": {
+    "id": 14,
+    "type": "string"
   }
 }

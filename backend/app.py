@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from iibin import Schema
 from . import audio, inference, training
+from .speech import SpeechSession
 from .store import ROOT, VAR, db, init, new_thread, delete_thread, add_message
 
 log=logging.getLogger('shopfloor')
@@ -164,11 +165,19 @@ async def handle(packet,send):
             except Exception:
                 log.exception('Audio preparation failed')
                 return {'state':'text_only'}
-        await send({'op':'message.audio','tid':tid,'audio':Path(variant['path']).read_bytes(),'text':variant['text'],'rows':[{'id':mid,'kind':'assistant','text':variant['text'],'values':values(audio_id=variant['id'])}]})
+        # PCM blocks play as they arrive and can be cancelled between any two blocks.
+        with wave.open(variant['path'], 'rb') as wav:
+            if wav.getsampwidth()!=2 or wav.getnchannels()!=1:raise ValueError('PCM16-Mono-Audio erforderlich.')
+            await send({'op':'audio.start','stream':mid,'tid':tid,'rate':wav.getframerate(),'text':variant['text'],'rows':[{'id':mid,'kind':'assistant','text':variant['text'],'values':values(audio_id=variant['id'])}]})
+            while chunk:=wav.readframes(2048):
+                await send({'op':'audio.chunk','stream':mid,'tid':tid,'audio':chunk})
+                await asyncio.sleep(2048/wav.getframerate())
+        await send({'op':'audio.end','stream':mid,'tid':tid})
         return {'state':'done'}
     raise ValueError('Operation nicht implementiert')
 
 
+@app.websocket('/')
 @app.websocket('/ws')
 async def websocket(ws:WebSocket):
     origin=ws.headers.get('origin','')
@@ -178,12 +187,27 @@ async def websocket(ws:WebSocket):
     async def raw_send(data):
         async with lock:await ws.send_bytes(SCHEMA.encode(data))
     tasks=set()
+    session=SpeechSession(raw_send, handle)
     async def process(data):
         packet={}
         try:
             packet=SCHEMA.decode(data)
             async def send(payload):await raw_send({'id':packet.get('id',''),**payload})
-            result=await handle(packet,send)
+            op=packet.get('op')
+            if op=='voice.start':
+                ensure_thread(packet.get('tid',''))
+                if packet.get('rate')!=16000:raise ValueError('Der Audiostream muss 16 kHz verwenden.')
+                session.interrupt(packet.get('turn',''))
+                session.reset();session.stream=packet.get('stream','');session.tid=packet['tid']
+                result={'state':'listening'}
+            elif op=='voice.stop':
+                session.stream='';session.reset();session.interrupt(packet.get('turn',''))
+                result={'state':'stopped'}
+            elif op=='response.interrupt':
+                session.interrupt(packet.get('turn',''));session.reset()
+                result={'state':'interrupted'}
+            elif op=='message.send':result=await session.respond(packet)
+            else:result=await handle(packet,send)
             await raw_send({'id':packet.get('id',''),'op':packet.get('op','')+'.result',**result})
         except (ValueError,RuntimeError) as e:
             with contextlib.suppress(Exception):await raw_send({'id':packet.get('id',''),'op':'error','error':str(e)})
@@ -196,11 +220,23 @@ async def websocket(ws:WebSocket):
             if event['type']=='websocket.disconnect':break
             data=event.get('bytes')
             if data is None:await ws.close(code=1003);break
+            # PCM input is processed in order, without an RPC/task per audio block.
+            try:packet=SCHEMA.decode(data)
+            except (ValueError,RuntimeError):
+                await ws.close(code=1003);break
+            if packet.get('op')=='voice.chunk':
+                try:session.feed(packet)
+                except ValueError as e:await raw_send({'op':'voice.status','state':'error','error':str(e)})
+                continue
+            if packet.get('op') in {'voice.start','voice.stop','response.interrupt'}:
+                await process(data)
+                continue
             if len(tasks)>=32:await ws.close(code=1013);break
             task=asyncio.create_task(process(data));tasks.add(task);task.add_done_callback(tasks.discard)
     except WebSocketDisconnect:pass
     finally:
-        # Accepted operations complete even if the browser disconnects.
+        await session.close()
+        # Accepted non-speech operations complete even if the browser disconnects.
         if tasks:await asyncio.gather(*tasks,return_exceptions=True)
 
 assets=ROOT/'frontend/dist/assets'

@@ -20,9 +20,10 @@ def machine_context(packet):
 
 def protocols():
     with db() as c:
-        counts=c.execute('SELECT COUNT(*) AS total,COALESCE(SUM(passed),0) AS passed FROM protocol').fetchone()
-        last=c.execute('SELECT passed,created FROM protocol ORDER BY created DESC,rowid DESC LIMIT 1').fetchone()
-    return {'total':counts['total'],'passed':counts['passed'],'failed':counts['total']-counts['passed'],'last':dict(last) if last else None}
+        counts=dict(c.execute('SELECT COUNT(*) AS total,COALESCE(SUM(passed),0) AS passed,MIN(created) AS first_created,MAX(created) AS last_created,AVG(pressure) AS average_pressure_bar,AVG(drop_value) AS average_drop_bar,AVG(duration) AS average_duration_seconds FROM protocol').fetchone())
+        recent=[dict(row) for row in c.execute('SELECT id,pressure AS pressure_bar,drop_value AS drop_bar,passed,duration AS duration_seconds,created FROM protocol ORDER BY created DESC,rowid DESC LIMIT 20')]
+    counts['failed']=counts['total']-counts['passed']
+    return {'all_protocols':counts,'recent_protocols':recent,'scope':'Statistik über alle gespeicherten Prüfungen; Einzelwerte nur für die letzten 20 Prüfungen. Keine dokumentierten Fehlerursachen.'}
 
 
 def interlock(category, state):
@@ -143,7 +144,7 @@ async def sentence_audio(output, source):
 async def reply(packet,send):
     tid,text=packet['tid'],packet.get('text','').strip()
     if not text or len(text)>1000:raise ValueError('Eine Nachricht muss zwischen 1 und 1.000 Zeichen enthalten.')
-    with db() as c:history=[{'role':r['role'],'content':r['text'][:200]} for r in reversed(c.execute('SELECT role,text FROM message WHERE thread_id=? ORDER BY rowid DESC LIMIT 2',(tid,)).fetchall())]
+    with db() as c:history=[{'role':r['role'],'content':r['text'][:1000]} for r in reversed(c.execute('SELECT role,text FROM message WHERE thread_id=? ORDER BY rowid DESC LIMIT 2',(tid,)).fetchall())]
     uid=add_message(tid,'user',text)
     await send({'op':'message.accepted','tid':tid,'rows':[{'id':uid,'kind':'user','text':text}]})
     context=machine_context(packet);voice=audio.active_voice();output=Output(tid,voice,send)
@@ -151,26 +152,18 @@ async def reply(packet,send):
     try:
         category,action=interlock(await decision,context);output.category=category
         dynamic=None
-        if category=='protocol_summary':
-            stats=protocols()
-            dynamic=f"Wir haben insgesamt {stats['total']} Prüfungen durchgeführt. Davon sind {stats['failed']} fehlgeschlagen und {stats['passed']} bestanden."
-            if re.search(r'letzt|status',text,re.I) and stats['last']:
-                dynamic+=' Die letzte Prüfung wurde '+('bestanden' if stats['last']['passed'] else 'nicht bestanden')+'.'
-        elif category=='machine_status':
+        if category=='machine_status':
             states={'ready':'bereit','filling':'im Druckaufbau','settling':'in der Stabilisierung','measuring':'in der Messphase','passed':'bestanden','failed':'fehlgeschlagen'}
             dynamic='Die Prüfung ist '+states.get(context.get('stage'),'noch nicht geöffnet')+'. Die Schutzhaube ist '+('geöffnet' if context.get('guardOpen',True) else 'geschlossen')+'. Das Ventil ist '+('eingelegt.' if context.get('valveInserted') else 'nicht eingelegt.')
         elif category=='machine_pressure' and isinstance(context.get('pressure'),(int,float)):
             dynamic='Der aktuelle Prüfdruck beträgt '+format(context['pressure'],'.2f').replace('.',',')+' bar.'
-        if category=='fallback' or category.startswith('faq_') and not audio.choose(tid,category,voice):
+        if category in {'fallback','protocol_summary'} or category.startswith('faq_') and not audio.choose(tid,category,voice):
             if not output.mid:await output.update('')
-            facts={'machine':context,'protocols':protocols()}
-            related=inference.relevant_faq(text)
-            related=[{'question':row['question'],'answer':row['answer']} for row in related[:2] if row['match']>.25]
-            if related:facts['faq']=related
+            facts={'protocols':protocols()} if category=='protocol_summary' else {}
             if category.startswith('faq_'):
                 with db() as c:faq=c.execute('SELECT question,answer FROM faq WHERE id=?',(category,)).fetchone()
                 if faq:facts['faq']=dict(faq)
-            output.category='conversation' if category=='fallback' else 'generated:'+category
+            output.category='generated:'+category if category!='fallback' else 'conversation'
             await sentence_audio(output,model_sentences(inference.AnswerStream(text,facts,history)))
         elif dynamic is not None:
             output.category='live:'+category

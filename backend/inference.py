@@ -113,7 +113,7 @@ ACTIONS = {
     'machine_start':'Die simulierte Druckprüfung jetzt starten.',
     'machine_pause':'Die laufende Prüfung pausieren oder fortsetzen.',
     'machine_reset':'Die simulierte Prüfung zurücksetzen.',
-    'protocol_summary':'Prüfstatistik abfragen: Anzahl abgeschlossener, bestandener oder fehlgeschlagener Prüfungen; Ausschuss, Fehlerquote oder letztes Prüfergebnis.',
+    'protocol_summary':'Frage zu tatsächlich gespeicherten Prüfprotokollen, Messwerten, Prüfergebnissen oder Statistiken: Anzahl, Fehlerquote, letztes Ergebnis oder Vergleich. Keine allgemeine Frage zum Prüfverfahren und kein Auftrag, die Protokollansicht zu öffnen.',
     'machine_status':'Den aktuellen Zustand des Prüfstands, der Schutzhaube oder des eingelegten Ventils abfragen.',
     'machine_pressure':'Den aktuellen Druck des Prüfstands abfragen.',
     'fallback':'Kein passender Befehl und keine passende FAQ-Frage; unklar oder themenfremd.',
@@ -128,6 +128,11 @@ def machine_command(text):
         return near[0] if near else token
     text=re.sub(r'\b\w+\b',repair,text).replace('eingeliegt','eingelegt')
     if re.search(r'\b(wie ?viele|anzahl|bilanz|statistik|fehlerquote|ausschuss|fehlgeschlagen|durchgefallen)\b',text) and re.search(r'pruef|protokoll|ausschuss',text):return 'protocol_summary'
+    if (re.search(r'pruefprotokoll|pruefergebnis|pruefung|messwert',text)
+            and re.search(r'\b(unsere?\w*|meine?\w*|bisherig\w*|letzte\w*|heutige\w*|gestrige\w*)\b',text)
+            and re.search(r'\?|\b(was|wie|welch\w*|warum|sag\w*|erzaehl\w*|bericht\w*|zusammen\w*|auswert\w*|analys\w*|ueberblick|vergleich\w*)\b',text)
+            and not re.search(r'\b(oeffn\w*|anzeigen|ansicht|start\w*|abbrech\w*|pausier\w*|fortsetz\w*|zuruecksetz\w*)\b',text)):
+        return 'protocol_summary'
     # Knowledge questions remain classifier input; requests such as "kannst du" are commands.
     if re.search(r'\b(wie|warum|wann|wieso|weshalb|erklaer\w*)\b|\b(kann|darf|soll|muss) ich\b',text):return None
     machine=bool(re.search(r'\b(ventil|pruefung|prueflauf|pruefzyklus|druckpruefung|test|schutzhaube|schutzklappe|haube|klappe|abdeckung|deckel|tuer)\b',text))
@@ -168,19 +173,19 @@ def decide(text, context=None, history=None):
     command=machine_command(text)
     if command:return command
     if re.fullmatch(r'\s*(hallo|hi|hey|guten (morgen|tag|abend)|moin|servus|tschuess)[!. ]*',text.casefold()):return 'greeting'
-    # Actions and knowledge never compete in the same choice list.
     matches=relevant_faq(text)
-    if matches and matches[0]['match']>=.78:return matches[0]['id']
-    if agent is None:return 'fallback'
-    knowledge=bool(re.search(r'\b(wie|warum|wann|wieso|weshalb)\b|\b(kann|darf|soll|muss) ich\b',text.casefold()))
-    if not knowledge:
-        criteria={k:v for k,v in ACTIONS.items() if k not in {'greeting','fallback'}}
-        criteria['none']='Keine konkrete Aktion: Wissensfrage, allgemeine Unterhaltung oder unklarer Text.'
+    if agent is None:
+        return matches[0]['id'] if matches and matches[0]['match']>=.78 else 'fallback'
+    knowledge=bool(re.search(r'\b(was|wer|welche\w*|wie|warum|wann|wieso|weshalb)\b|\b(kann|darf|soll|muss) ich\b',text.casefold()))
+    if agent is not None:
+        criteria={k:v for k,v in ACTIONS.items() if k not in {'greeting','fallback'} and (not knowledge or k in {'protocol_summary','machine_status','machine_pressure'})}
+        criteria['none']='Weder Maschinenauftrag noch Abfrage gespeicherter Prüfprotokolle oder des aktuellen Maschinenzustands; allgemeine Wissensfrage, Unterhaltung oder unklarer Text.'
         with _lock:
-            prediction=agent.predict(text,{'action':{'type':'choice','instructions':'Erkenne den gewünschten Auftrag sinngemäß. Keine Aktion bei Fragen nach einer Anleitung, Verneinung oder Unterhaltung. Dann none.','criteria':criteria}},lang='de')
+            prediction=agent.predict(text,{'action':{'type':'choice','instructions':'Erkenne Maschinenaufträge und Fragen zu gespeicherten Prüfprotokollen oder aktuellem Maschinenzustand. Keine Steueraktion bei Anleitungen, Verneinung oder Unterhaltung; ohne passenden Zweig none.','criteria':criteria}},lang='de')
         result=prediction.get('answers',prediction)['action'];probabilities=result.get('probabilities',{})
         ranked=sorted(probabilities.values(),reverse=True)
         if result['choice']!='none' and probabilities.get(result['choice'],0)>=.72 and (len(ranked)<2 or ranked[0]-ranked[1]>=.18):return result['choice']
+    if matches and matches[0]['match']>=.78:return matches[0]['id']
     with db() as c:faqs=c.execute('SELECT * FROM faq').fetchall()
     criteria={r['id']:r['question']+' '+r['answer'] for r in faqs}
     criteria['none']='Keine dieser FAQ beantwortet die Frage; allgemeine Unterhaltung, unklarer Text oder anderes Thema.'
@@ -212,7 +217,8 @@ def synthesize_sentence(text, voice_id):
 class AnswerStream:
     def __init__(self,text,context,history):
         self.stopped=threading.Event();self.response=None
-        self.messages=[{'role':'system','content':'Du bist Werkraum, ein deutscher Shopfloor-Assistent für Ventilprüfung, Haubensteuerung und Prüfprotokolle. Antworte sachlich in drei bis sechs kurzen Sätzen ohne Markdown. Nutze beigefügte Fakten; erfinde keine Messwerte oder ausgeführten Aktionen. Allgemeine Fragen sind erlaubt. Bei unklarem Text frage nach; benenne fehlendes Echtzeitwissen ehrlich.'},*history,{'role':'user','content':json.dumps({'question':text,'facts':context},ensure_ascii=False)}]
+        self.context_size=4096 if context.get('protocols') else 2048
+        self.messages=[{'role':'system','content':'Du bist Werkraum, ein deutschsprachiger Sprachbot in einem Ventil-Dichtheitsprüfungssystem; allgemeine Fragen und Gespräche beantwortest du ebenfalls. Beantworte die aktuelle Frage direkt und sachlich in ein bis drei kurzen Sätzen ohne Markdown, bei Unklarheit stelle eine kurze Rückfrage. Über diese Maschine, ihre Funktionen und Prüfprotokolle darfst du nur die beigefügten Fakten verwenden; frühere Gesprächsaussagen sind kein Beleg, erfinde weder Eigenschaften, Einschränkungen, Messwerte noch ausgeführte Aktionen. Fehlen Informationen über das System, sage, dass du darüber nicht mehr weißt und andere allgemeine Fragen beantworten kannst. Verwende Fakten nur, wenn sie zur Frage gehören, beachte den angegebenen Datenumfang und behaupte bei Protokollen keine Fehlerursachen, die dort nicht dokumentiert sind.'},*history,{'role':'user','content':json.dumps({'question':text,'facts':context},ensure_ascii=False)}]
     def cancel(self):
         self.stopped.set()
         if self.response:
@@ -220,7 +226,7 @@ class AnswerStream:
             try:self.response.close()
             except Exception:pass
     def sentences(self):
-        payload={'model':os.getenv('QWEN_MODEL','qwen3.5:2b'),'stream':True,'think':False,'messages':self.messages,'options':{'num_predict':260,'num_ctx':2048,'temperature':.35,'presence_penalty':0,'repeat_penalty':1.05,'num_thread':int(os.getenv('CPU_THREADS','4'))}}
+        payload={'model':os.getenv('QWEN_MODEL','qwen3.5:2b'),'stream':True,'think':False,'messages':self.messages,'options':{'num_predict':260,'num_ctx':self.context_size,'temperature':.35,'presence_penalty':0,'repeat_penalty':1.05,'num_thread':int(os.getenv('CPU_THREADS','4'))}}
         request=urllib.request.Request(os.getenv('OLLAMA_URL','http://127.0.0.1:11435')+'/api/chat',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
         pending='';count=0
         with urllib.request.urlopen(request,timeout=45) as response:

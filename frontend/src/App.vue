@@ -1,0 +1,13 @@
+<script setup>
+import {computed,onMounted,onUnmounted} from 'vue'
+import {useRoute,useRouter} from 'vue-router'
+import {ArrowLeft,Settings,AudioLines,Play,X} from 'lucide-vue-next'
+import {state,bootstrap,play} from './state'
+import {connection} from './transport'
+const route=useRoute(),router=useRouter(),isHome=computed(()=>route.path==='/')
+const navigation={nav_machine:'/machines/valve-leak-test',nav_dashboard:'/',nav_protocols:'/protocols',nav_knowledge:'/knowledge',nav_voice:'/admin/voices'}
+function action(e){const key=e.detail;if(navigation[key])router.push(navigation[key]);else if(key.startsWith('machine_')){if(route.path!=='/machines/valve-leak-test'){state.pendingAction=key;router.push('/machines/valve-leak-test')}else state.pendingAction=key}}
+onMounted(()=>{bootstrap();window.addEventListener('shopfloor-action',action)})
+onUnmounted(()=>window.removeEventListener('shopfloor-action',action))
+</script>
+<template><div class="app-shell"><header class="app-header"><RouterLink to="/" class="brand" aria-label="Zur Übersicht"><span class="brand-symbol">✳</span>werkraum<span class="brand-period">.</span></RouterLink><div class="header-center">WERK KÖLN <span>/</span> HALLE 04</div><div class="header-actions"><span class="environment">Lokale Simulation</span><RouterLink to="/admin" class="icon-button" title="Verwaltung"><Settings :size="20"/></RouterLink><span class="identity" title="Lokale Demoidentität">D</span></div></header><main class="surface"><div v-if="!isHome" class="surface-top"><RouterLink to="/" class="back"><ArrowLeft :size="16"/> Zur Übersicht</RouterLink><span class="surface-label">{{route.meta.title}}</span></div><RouterView/></main><div v-if="state.notice" role="status" class="toast">{{state.notice}}<button @click="state.notice=''" aria-label="Hinweis schließen"><X :size="16"/></button></div><button v-if="state.audioBlocked&&state.lastAudio" class="enable-audio" @click="play(state.lastAudio.bytes,state.lastAudio.tid,state.lastAudio.audioId)"><Play :size="16"/> Gesprochene Antwort abspielen</button><footer class="app-footer"><span>WERKRAUM / SHOPFLOOR</span><span>{{connection.state==='connected'?'Verbunden':'Verbindung wird hergestellt'}} · CPU-Verarbeitung</span></footer></div></template>

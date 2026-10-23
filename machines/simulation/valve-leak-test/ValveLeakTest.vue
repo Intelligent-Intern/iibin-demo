@@ -18,6 +18,7 @@ const readings = ref([])
 const paused = ref(false)
 let renderer, scene, camera, controls, observer, animation, guard, clamp, piston, flow, particles, lightRing
 let guardAngle = 0, clampY = 0, lastSample = -1, lastTime = 0, audioContext
+let disposed = false
 const disposableTextures = []
 const running = computed(() => ['filling', 'settling', 'measuring'].includes(stage.value))
 const phaseName = computed(() => ({ ready: 'Prüfbereit', filling: 'Druck aufbauen', settling: 'Druck stabilisieren', measuring: 'Dichtheit messen', passed: 'Ventil dicht', failed: 'Leck erkannt' }[stage.value]))
@@ -44,7 +45,9 @@ function tone(frequency) {
     const oscillator = audioContext.createOscillator(), gain = audioContext.createGain()
     oscillator.frequency.value = frequency; gain.gain.setValueAtTime(.04, audioContext.currentTime)
     gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + .2)
-    oscillator.connect(gain); gain.connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + .2)
+    oscillator.connect(gain); gain.connect(audioContext.destination)
+    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect() }
+    oscillator.start(); oscillator.stop(audioContext.currentTime + .2)
   } catch { /* Audio is optional; machine state remains unaffected. */ }
 }
 function bevelBox(w, h, d, radius = .035) {
@@ -187,17 +190,23 @@ function initScene() {
   // Leak particles indicate the actual simulated joint during pressure hold.
   const particleGeometry = new THREE.BufferGeometry(); const positions = new Float32Array(40 * 3); particleGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3))
   particles = new THREE.Points(particleGeometry,new THREE.PointsMaterial({ color: '#eb6049', size: .038, transparent:true, opacity:.85, depthWrite:false })); particles.visible=false; scene.add(particles)
-  observer = new ResizeObserver(resize); observer.observe(viewport.value); resize(); lastTime = performance.now(); animate(lastTime)
+  observer = new ResizeObserver(resize); observer.observe(viewport.value); resize(); syncVisibility()
 }
 function resize() { if (!renderer || !viewport.value) return; const { width, height } = viewport.value.getBoundingClientRect(); if (!width || !height) return; renderer.setSize(width,height); camera.aspect=width/height; camera.updateProjectionMatrix() }
+function syncVisibility() {
+  cancelAnimationFrame(animation); animation = null
+  lastTime = performance.now()
+  if (!document.hidden && !disposed && renderer && !renderError.value) animation = requestAnimationFrame(animate)
+}
 function animate(now) {
+  if (disposed || document.hidden) { animation = null; return }
   animation = requestAnimationFrame(animate); const dt = Math.min((now-lastTime)/1000,.1); lastTime=now
   if (running.value && !paused.value) {
     elapsed.value=Math.min(10,elapsed.value+dt); const t=elapsed.value
     stage.value=t<3?'filling':t<5?'settling':'measuring'
     pressure.value=t<3?6*(1-Math.pow(1-t/3,2)):t<5?6-.012*(t-3):5.976-(t-5)*(leak.value ? .19 : .003)
     const sample=Math.floor(t*10); if(sample!==lastSample) { lastSample=sample;readings.value.push({t,p:pressure.value});publish() }
-    if(t>=10) { stage.value=leak.value?'failed':'passed';tone(leak.value?280:740);publish();emit('complete',currentState()) }
+    if(t>=10) { const failed = 5.976-pressure.value > .1; stage.value=failed?'failed':'passed';tone(failed?280:740);publish();emit('complete',currentState()) }
   }
   guardAngle += ((guardOpen.value ? -Math.PI*.58 : 0)-guardAngle)*Math.min(1,dt*6); if(guard) guard.rotation.y=guardAngle
   clampY += ((guardOpen.value ? .23 : 0)-clampY)*Math.min(1,dt*6); if(clamp) clamp.position.y=clampY
@@ -210,11 +219,16 @@ function animate(now) {
   }
   controls?.update();renderer?.render(scene,camera)
 }
-onMounted(() => { try { initScene(); publish() } catch(error) { renderError.value=true; console.error('Valve test 3D initialization failed:',error) } })
+onMounted(() => {
+  document.addEventListener('visibilitychange', syncVisibility)
+  try { initScene(); publish() } catch(error) { renderError.value=true; console.error('Valve test 3D initialization failed:',error) }
+})
 onBeforeUnmount(() => {
+  disposed = true
+  document.removeEventListener('visibilitychange', syncVisibility)
   cancelAnimationFrame(animation);observer?.disconnect();controls?.dispose();audioContext?.close()
   const geometries=new Set(),materials=new Set();scene?.traverse(n=>{if(n.geometry)geometries.add(n.geometry);if(n.material)(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>materials.add(m))})
-  geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());disposableTextures.forEach(t=>t.dispose());renderer?.dispose();renderer?.domElement.remove()
+  geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());disposableTextures.forEach(t=>t.dispose());renderer?.dispose();renderer?.forceContextLoss();renderer?.domElement.remove()
 })
 defineExpose({startTest,pauseTest,resetTest,setLeak,toggleGuard,currentState})
 </script>

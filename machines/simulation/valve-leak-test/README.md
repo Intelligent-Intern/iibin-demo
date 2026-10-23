@@ -11,3 +11,5 @@ Exposed methods: `startTest()`, `pauseTest()` (toggles pause), `resetTest()`, `s
 Cycle: 3 s pressure buildup, 2 s stabilization, 5 s isolated pressure hold. Nominal pressure 6 bar. Healthy specimen loses 0.015 bar during measurement; defective specimen loses 0.95 bar. Acceptance threshold shown in the UI is 0.10 bar. These are explicitly simulated values for the application, not a validated industrial test procedure.
 
 The component currently owns the local simulation clock. For a shared multi-client machine, replace that clock with authoritative server state; retain the same command methods and state representation. No external assets or network requests are required. All renderer, geometry, texture, material, observer and animation resources are released on unmount.
+
+Rendering and the simulation clock stop while the browser document is hidden; returning resumes without counting hidden time. Leaving the route disposes GPU resources and explicitly releases the WebGL context. Pass/fail is evaluated from measured pressure loss against the stated threshold.

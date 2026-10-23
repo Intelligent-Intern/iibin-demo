@@ -1,6 +1,6 @@
 # Werkraum — IIBIN Shopfloor
 
-Vue 3 + Tailwind application, FastAPI binary IIBIN WebSocket backend, native C Python codec, Three.js valve leak-test station. Each surface has its own route and a back link to the dashboard. No application sidebar.
+Vue 3 + Tailwind application, FastAPI binary IIBIN WebSocket backend, native C Python codec, Three.js valve leak-test station. Each surface has its own route and a back link to the dashboard. The machine stays alive across route changes so its guard, inserted valve and running inspection are retained. Voice commands can open/close the guard, insert/remove the valve and start the inspection; “Ich habe das Ventil eingelegt” registers insertion. The insertion button moves the specimen into the fixture. Insertion/removal requires an open guard; starting requires an inserted valve and a closed guard; the guard is locked during a running or paused inspection. No application sidebar.
 
 From this directory:
 

@@ -145,8 +145,16 @@ async def handle(packet,send):
         started=time.perf_counter();category=await asyncio.to_thread(inference.decide,text)
         action_category=category
         dynamic_answer=None
+        context={v['key']:v.get('flag',v.get('number',v.get('text'))) for r in packet.get('rows',[]) if r.get('id')=='machine' for v in r.get('values',[])}
+        guard_open=context.get('guardOpen',True);inserted=context.get('valveInserted',False)
+        running=context.get('stage') in {'filling','settling','measuring'}
+        if category in {'machine_guard_open','machine_guard_close','machine_insert','machine_remove','machine_start'}:
+            if running:category='machine_blocked_running'
+            elif category=='machine_start' and not inserted:category='machine_blocked_valve'
+            elif category=='machine_start' and guard_open:category='machine_blocked_start_guard'
+            elif category in {'machine_insert','machine_remove'} and not guard_open and inserted!=(category=='machine_insert'):category='machine_blocked_guard'
+            if category.startswith('machine_blocked_'):action_category=''
         if category=='machine_pressure':
-            context={v['key']:v.get('number') for r in packet.get('rows',[]) if r.get('id')=='machine' for v in r.get('values',[])}
             current=context.get('pressure')
             if isinstance(current,(int,float)) and 0<=current<=7:
                 dynamic_answer='Der aktuelle Prüfdruck beträgt '+format(current,'.2f').replace('.',',')+' bar.'

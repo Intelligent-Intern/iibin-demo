@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onActivated, onDeactivated, ref } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -11,7 +11,8 @@ const stage = ref('ready')
 const elapsed = ref(0)
 const pressure = ref(0)
 const leak = ref(false)
-const guardOpen = ref(false)
+const guardOpen = ref(true)
+const valveInserted = ref(false)
 const cutaway = ref(false)
 const sound = ref(false)
 const renderError = ref(false)
@@ -19,24 +20,31 @@ const readings = ref([])
 const paused = ref(false)
 let renderer, scene, camera, controls, observer, animation, guard, clamp, piston, flow, particles, lightRing
 let guardAngle = 0, clampY = 0, lastSample = -1, lastTime = 0, audioContext
+let specimenGroup, specimenProgress = 0, activeScene = true
 let disposed = false
 const disposableTextures = []
 const running = computed(() => ['filling', 'settling', 'measuring'].includes(stage.value))
-const phaseName = computed(() => ({ ready: 'Prüfbereit', filling: 'Druck aufbauen', settling: 'Druck stabilisieren', measuring: 'Dichtheit messen', passed: 'Ventil dicht', failed: 'Leck erkannt' }[stage.value]))
+const phaseName = computed(() => ({ ready: !valveInserted.value ? 'Ventil einlegen' : guardOpen.value ? 'Schutzhaube schließen' : 'Prüfbereit', filling: 'Druck aufbauen', settling: 'Druck stabilisieren', measuring: 'Dichtheit messen', passed: 'Ventil dicht', failed: 'Leck erkannt' }[stage.value]))
 const progress = computed(() => Math.min(100, elapsed.value * 10))
 const chartPath = computed(() => readings.value.map((p, i) => `${i ? 'L' : 'M'}${(p.t / 10 * 540 + 42).toFixed(1)},${(147 - p.p / 6.5 * 120).toFixed(1)}`).join(' '))
-const currentState = () => ({ machine: 'valve-leak-test', stage: stage.value, elapsed: Number(elapsed.value.toFixed(2)), pressure: Number(pressure.value.toFixed(3)), leak: leak.value, guardOpen: guardOpen.value, paused: paused.value, result: stage.value === 'passed' ? 'pass' : stage.value === 'failed' ? 'fail' : null })
+const currentState = () => ({ machine: 'valve-leak-test', stage: stage.value, elapsed: Number(elapsed.value.toFixed(2)), pressure: Number(pressure.value.toFixed(3)), leak: leak.value, guardOpen: guardOpen.value, valveInserted: valveInserted.value, paused: paused.value, result: stage.value === 'passed' ? 'pass' : stage.value === 'failed' ? 'fail' : null })
 function publish() { emit('state', currentState()) }
 function startTest() {
   if (running.value) return false
-  if (guardOpen.value) return false
+  if (guardOpen.value || !valveInserted.value) return false
   readings.value = [{ t: 0, p: 0 }]; elapsed.value = 0; pressure.value = 0
   view.value = 'measurement'; lastSample = -1; stage.value = 'filling'; paused.value = false; publish(); return true
 }
 function pauseTest() { if (!running.value) return false; paused.value = !paused.value; publish(); return true }
 function resetTest() { view.value = 'prepare'; stage.value = 'ready'; elapsed.value = 0; pressure.value = 0; readings.value = []; paused.value = false; publish() }
 function setLeak(value) { if (running.value) return false; leak.value = Boolean(value); resetTest(); return true }
-function toggleGuard() { if (running.value) return false; guardOpen.value = !guardOpen.value; publish(); return true }
+function setGuard(open) { if (running.value) return false; guardOpen.value = open; view.value = 'prepare'; publish(); return true }
+function toggleGuard() { return setGuard(!guardOpen.value) }
+function insertValve(value = true) {
+  if (valveInserted.value === value) return true
+  if (running.value || !guardOpen.value) return false
+  valveInserted.value = value; resetTest(); return true
+}
 function resetView() { if (!camera) return; camera.position.set(6.3, 4.6, 7.3); controls.target.set(0, 1.5, 0); controls.update() }
 function toggleCutaway() { cutaway.value = !cutaway.value; scene?.getObjectByName('valve-shell')?.traverse(n => { if (n.isMesh) n.visible = !cutaway.value }); publish() }
 function tone(frequency) {
@@ -184,6 +192,7 @@ function initScene() {
   box(.41, .42, .26, dark, [-1.18, 2.38, -.77]); cylinder(.16, .16, rubber, [-1.18, 2.66, -.77]);
   const instruction = new THREE.MeshBasicMaterial({ map: labelTexture('DICHTHEIT', 'PRÜFDRUCK 6,0 BAR · 10 S', '#e0e9ef') })
   mesh(new THREE.PlaneGeometry(1.35, .45), instruction, [.63, 3.03, -.985])
+  const specimenStart = scene.children.length
   // Valve body: turned cylindrical housing, hex union nuts and visible seals.
   const shell = new THREE.Group(); shell.name = 'valve-shell'; shell.position.set(0, 1.76, .07); scene.add(shell)
   const lathePoints = [[.0,-.52],[.22,-.52],[.25,-.48],[.25,-.28],[.32,-.24],[.34,-.18],[.34,.18],[.32,.24],[.25,.28],[.25,.48],[.22,.52],[.0,.52]].map(([r,y]) => new THREE.Vector2(r,y))
@@ -209,6 +218,9 @@ function initScene() {
   const actuatorPlate = new THREE.MeshBasicMaterial({ map: labelTexture('V-014', 'NC / DN 15', '#244766', '#ffffff') })
   mesh(new THREE.PlaneGeometry(.37, .14), actuatorPlate, [0, 2.32, .291])
   for (const x of [-.155, .155]) for (const z of [-.08, .22]) bolt(x, 2.5, z, scene, .024)
+  const specimenParts = scene.children.slice(specimenStart)
+  specimenGroup = new THREE.Group(); scene.add(specimenGroup)
+  specimenParts.forEach(part => specimenGroup.attach(part)); specimenGroup.visible = false
   // Locating cradle and guided pneumatic clamping gantry.
   for (const x of [-.4, .4]) { box(.23, .25, .66, edge, [x, 1.35, .07]); box(.25, .055, .56, rubber, [x, 1.49, .07]) }
   for (const x of [-1.08, 1.08]) { box(.38, .11, .75, edge, [x, 1.3, .07]); cylinder(.065, 1.45, chrome, [x, 2.05, -.26]); bolt(x, 1.365, .3) }
@@ -269,8 +281,12 @@ function animate(now) {
     particles.visible=leak.value&&elapsed.value>5&&(running.value||stage.value==='failed')
     if(particles.visible) { const pos=particles.geometry.attributes.position; for(let i=0;i<40;i++){ const a=(now*.00035+i/40)%1;pos.setXYZ(i,.48+a*.9,1.82+a*.7+Math.sin(i*1.7)*a*.18,.2+Math.cos(i*2.1)*a*.3) }pos.needsUpdate=true }
   }
-  if(view.value==='prepare'){ controls?.update();renderer?.render(scene,camera) }
+  specimenProgress += ((valveInserted.value ? 1 : 0)-specimenProgress)*Math.min(1,dt*8)
+  if(specimenGroup){specimenGroup.visible=specimenProgress>.005;specimenGroup.position.set(-(1-specimenProgress)*1.4,(1-specimenProgress)*1.1,0)}
+  if(activeScene&&view.value==='prepare'){ controls?.update();renderer?.render(scene,camera) }
 }
+onActivated(() => { activeScene=true;resize() })
+onDeactivated(() => { activeScene=false })
 onMounted(() => {
   document.addEventListener('visibilitychange', syncVisibility)
   try { initScene(); publish() } catch(error) { renderError.value=true; console.error('Valve test 3D initialization failed:',error) }
@@ -282,7 +298,7 @@ onBeforeUnmount(() => {
   const geometries=new Set(),materials=new Set();scene?.traverse(n=>{if(n.geometry)geometries.add(n.geometry);if(n.material)(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>materials.add(m))})
   geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());disposableTextures.forEach(t=>t.dispose());renderer?.dispose();renderer?.forceContextLoss();renderer?.domElement.remove()
 })
-defineExpose({startTest,pauseTest,resetTest,setLeak,toggleGuard,currentState})
+defineExpose({startTest,pauseTest,resetTest,setLeak,toggleGuard,setGuard,insertValve,currentState})
 </script>
 
 <template>
@@ -304,11 +320,12 @@ defineExpose({startTest,pauseTest,resetTest,setLeak,toggleGuard,currentState})
       <aside class="control-panel">
         <div class="control-heading"><span class="eyebrow">Prüfauftrag</span><strong>VP-2026-0148</strong><span>Kühlmittelventil · Los 024</span></div>
         <div class="state-banner" :class="{passed:stage==='passed',failed:stage==='failed'}"><span>{{ paused ? 'Prüfung pausiert' : phaseName }}</span><strong>{{ pressure.toFixed(2).replace('.',',') }} <small>bar</small></strong></div>
-        <div class="test-facts"><div><span>Prüfdruck</span><strong>6,00 bar</strong></div><div><span>Messdauer</span><strong>5 s</strong></div><div><span>Grenzwert Druckverlust</span><strong>0,10 bar</strong></div><div><span>Schutzhaube</span><strong>{{guardOpen?'Geöffnet':'Geschlossen'}}</strong></div></div>
+        <div class="test-facts"><div><span>Prüfdruck</span><strong>6,00 bar</strong></div><div><span>Messdauer</span><strong>5 s</strong></div><div><span>Grenzwert Druckverlust</span><strong>0,10 bar</strong></div><div><span>Ventil</span><strong>{{valveInserted?'Eingelegt':'Nicht eingelegt'}}</strong></div><div><span>Schutzhaube</span><strong>{{guardOpen?'Geöffnet':'Geschlossen'}}</strong></div></div>
         <fieldset v-show="view==='prepare'" class="specimen-selector" :disabled="running"><legend>Prüfling wählen</legend><div><button type="button" :class="{active:!leak}" :aria-pressed="!leak" @click="setLeak(false)">Dichtes Ventil</button><button type="button" :class="{active:leak}" :aria-pressed="leak" @click="setLeak(true)">Mit Leckage</button></div></fieldset>
-        <div class="main-controls"><button type="button" class="primary" :disabled="guardOpen" @click="running?pauseTest():startTest()"><svg viewBox="0 0 24 24" aria-hidden="true"><path v-if="running&&!paused" d="M8 5v14M16 5v14"/><path v-else d="m8 4 12 8-12 8Z"/></svg>{{running?(paused?'Fortsetzen':'Pausieren'):'Prüfung starten'}}</button><button type="button" class="reset" @click="resetTest" aria-label="Prüfung zurücksetzen" title="Prüfung zurücksetzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8V4m0 4h4M5 8a8 8 0 1 1-1 7"/></svg></button></div>
+        <div class="main-controls"><button type="button" class="primary" :disabled="guardOpen||!valveInserted" @click="running?pauseTest():startTest()"><svg viewBox="0 0 24 24" aria-hidden="true"><path v-if="running&&!paused" d="M8 5v14M16 5v14"/><path v-else d="m8 4 12 8-12 8Z"/></svg>{{running?(paused?'Fortsetzen':'Pausieren'):'Prüfung starten'}}</button><button type="button" class="reset" @click="resetTest" aria-label="Prüfung zurücksetzen" title="Prüfung zurücksetzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8V4m0 4h4M5 8a8 8 0 1 1-1 7"/></svg></button></div>
+        <button v-show="view==='prepare'" type="button" class="insert-button" :disabled="running||!guardOpen" @click="insertValve(!valveInserted)">{{valveInserted?'Ventil entnehmen':'Ventil einlegen'}}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14v12H5ZM12 3v10m-4-4 4 4 4-4"/></svg></button>
         <button v-show="view==='prepare'" type="button" class="guard-button" :disabled="running" @click="toggleGuard">{{guardOpen?'Schutzhaube schließen':'Schutzhaube öffnen'}}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V4H5ZM14 12h2"/></svg></button>
-        <p v-if="guardOpen" class="guard-hint">Schutzhaube schließen, um die Prüfung zu starten.</p>
+        <p v-if="!valveInserted" class="guard-hint">{{guardOpen?'Ventil einlegen.':'Schutzhaube öffnen und Ventil einlegen.'}}</p><p v-else-if="guardOpen" class="guard-hint">Schutzhaube schließen, um die Prüfung zu starten.</p>
         <div v-if="stage==='passed'||stage==='failed'" class="test-result" aria-live="polite"><strong>{{stage==='passed'?'Prüfung bestanden':'Prüfung nicht bestanden'}}</strong><span>{{stage==='passed'?'Druckverlust innerhalb der Toleranz.':'Druckverlust an der rechten Ventilverbindung.'}}</span><span>Δp {{(5.976-pressure).toFixed(3).replace('.',',')}} bar / 5 s</span></div>
       </aside>
     </div>
@@ -323,4 +340,8 @@ defineExpose({startTest,pauseTest,resetTest,setLeak,toggleGuard,currentState})
 .valve-lab{height:100%;min-height:0;display:flex;flex-direction:column;gap:12px;overflow:hidden}.work-modes{display:flex;align-items:center;gap:5px;flex-shrink:0}.work-modes button{padding:8px 15px;font-size:11px;background:transparent;border-color:transparent}.work-modes button.active{background:#2257d9;color:white;border-color:#2257d9}.work-modes>span{margin-left:auto;font-size:9px;letter-spacing:1px;color:#607e98}.lab-workspace{flex:1;min-height:0;grid-template-rows:minmax(0,1fr);grid-template-columns:minmax(0,1fr) 270px;gap:15px}.scene-panel{min-height:0!important;height:100%!important}.scene-viewport{position:absolute;inset:0 0 34px;height:auto!important;min-height:0!important}.scene-caption{padding:9px 17px;font-size:10px}.scene-title{top:17px;left:19px}.scene-title h2{font-size:20px}.scene-tools{bottom:48px;left:17px}.scene-tools button{padding:7px 9px;font-size:11px}.control-panel{min-height:0;gap:13px;padding:17px;overflow:auto;scrollbar-width:none}.control-panel::-webkit-scrollbar{display:none}.control-heading{gap:4px}.control-heading strong{font-size:17px}.control-heading>span:last-child{font-size:11px}.state-banner{padding:12px;gap:8px}.state-banner strong{font-size:30px}.test-facts{gap:8px}.measurement-panel{min-width:0;min-height:0;display:flex;flex-direction:column;padding:22px;margin:0;overflow:hidden}.measurement-header{flex-shrink:0}.measurement-header h3{font-size:24px}.phase-track{flex-shrink:0;margin-top:28px}.pressure-chart{flex:1;min-height:0;height:auto;width:100%;margin-top:25px}.test-result{margin-top:0}.guard-hint{font-size:10px}.main-controls{margin-top:auto}.is-measuring .control-panel .test-facts{margin-bottom:10px}
 @media(max-height:760px) and (min-width:721px){.control-heading{display:none}.control-panel{gap:10px;padding:14px}.state-banner{padding:11px}.state-banner strong{font-size:26px}.test-facts{gap:6px;font-size:10px}.scene-title h2{font-size:18px}.scene-title .eyebrow{font-size:9px}.measurement-panel{padding:18px}.phase-track{margin-top:18px}.pressure-chart{margin-top:12px}}
 @media(max-width:720px){.lab-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(160px,1fr) auto;gap:10px}.control-panel{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;max-height:185px}.control-heading,.test-facts{display:none}.state-banner{padding:9px;gap:5px;grid-column:1}.state-banner strong{font-size:24px}.specimen-selector{grid-column:2;grid-row:1}.specimen-selector legend{margin-bottom:6px}.specimen-selector>div{grid-template-columns:1fr}.specimen-selector button{padding:5px;font-size:10px}.main-controls{grid-column:1;grid-row:2}.guard-button{grid-column:2;grid-row:2}.guard-hint,.test-result{grid-column:1/-1}.scene-tools>span{display:none}.scene-title{top:13px;left:14px}.scene-title h2{font-size:16px}.scene-title .eyebrow{font-size:8px}.simulation-label{padding:4px 6px}.scene-tools{bottom:42px;left:11px}.scene-tools button{padding:5px 7px;font-size:10px}.scene-caption{padding:8px 12px;font-size:9px}.scene-caption span:last-child{display:none}.work-modes button{padding:7px 11px;font-size:10px}.work-modes>span{font-size:8px}.measurement-panel{padding:15px}.phase-track{margin-top:17px;gap:7px}.measurement-header h3{font-size:20px}.measurement-time{gap:7px}.pressure-chart{margin-top:8px}.is-measuring .control-panel{max-height:150px}.is-measuring .main-controls{grid-column:2;grid-row:1;align-self:center}.is-measuring .test-result{grid-row:2}.scene-viewport{bottom:30px}}
+
+.insert-button{padding:10px;width:100%;justify-content:space-between!important}.control-panel{gap:10px}.test-facts{gap:6px}
+@media(min-width:721px) and (max-height:850px){.control-heading{display:none}}
+@media(max-width:720px){.control-panel{max-height:260px;gap:8px}.insert-button{grid-column:1;grid-row:2}.guard-button{grid-column:2;grid-row:2;margin:0}.main-controls{grid-column:1/-1;grid-row:3;margin:0}.guard-hint{grid-row:4;margin:0}.is-measuring .main-controls{grid-column:2;grid-row:1}}
 </style>

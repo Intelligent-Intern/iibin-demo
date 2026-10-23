@@ -8,7 +8,7 @@ export async function refreshThreads(){const r=await rpc('threads.list');state.t
 export async function newThread(){stopVoice();const r=await rpc('threads.create');state.threads=r.rows||[];await openThread(r.tid)}
 export async function openThread(tid){if(tid!==state.tid)stopVoice();state.tid=tid;localStorage.setItem('werkraum-thread',tid);const r=await rpc('messages.list',{tid});if(state.tid===tid)state.messages=r.rows||[]}
 export async function deleteThread(tid){if(tid===state.tid)stopVoice();await rpc('threads.delete',{tid});if(state.tid===tid){state.tid='';state.messages=[];localStorage.removeItem('werkraum-thread')}await refreshThreads()}
-function machineRows(){return state.machine?[{id:'machine',values:[{key:'pressure',number:state.machine.pressure}]}]:[]}
+function machineRows(){return state.machine?[{id:'machine',values:[{key:'pressure',number:state.machine.pressure},{key:'guardOpen',flag:state.machine.guardOpen},{key:'valveInserted',flag:state.machine.valveInserted},{key:'stage',text:state.machine.stage}]}]:[]}
 export async function send(text){
  if(!text.trim()||state.sending)return
  let turn

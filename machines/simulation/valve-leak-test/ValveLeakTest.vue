@@ -124,7 +124,7 @@ function initScene() {
   const rubber = material('#171b1d', 0, .85, { ...elastomer, bumpScale: .0035 })
   const hose = new THREE.MeshPhysicalMaterial({ color: '#254052', metalness: 0, roughness: .36, clearcoat: .42, clearcoatRoughness: .27 })
   const white = material('#d2d4d1', .04, .7, { ...coating, bumpScale: .0015 }), red = material('#a72823', 0, .4)
-  const glass = new THREE.MeshPhysicalMaterial({ color: '#f3fcff', metalness: 0, roughness: .07, transmission: .96, thickness: .035, ior: 1.586, attenuationColor: '#a7c4ca', attenuationDistance: 2, clearcoat: 1, clearcoatRoughness: .055, side: THREE.DoubleSide })
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#ffffff', metalness: 0, roughness: .008, transmission: 1, thickness: .035, ior: 1.586, attenuationColor: '#edf8fa', attenuationDistance: 5, clearcoat: .15, clearcoatRoughness: .008, side: THREE.FrontSide })
   const mesh = (geometry, mat, position = [0, 0, 0], parent = scene) => { const object = new THREE.Mesh(geometry, mat); object.position.set(...position); object.castShadow = mat !== glass; object.receiveShadow = true; parent.add(object); return object }
   const box = (w, h, d, mat, position, parent) => mesh(bevelBox(w, h, d), mat, position, parent)
   const cylinder = (r, h, mat, position, axis = 'y', parent = scene, segments = 48) => {

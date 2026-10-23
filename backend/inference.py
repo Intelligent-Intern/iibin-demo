@@ -7,7 +7,7 @@ import time
 import urllib.request
 import wave
 from pathlib import Path
-from .store import VAR, db
+from .store import ROOT, VAR, db
 
 _lock = threading.Lock()
 _voice_lock = threading.Lock()
@@ -126,16 +126,33 @@ def transcribe(audio):
         return ' '.join(s.text.strip() for s in segments).strip()
 
 
-def paraphrase(text, existing):
+APPROVED_VARIANTS=json.loads((ROOT/'content/answer-variants.json').read_text())
+
+class VariantsExhausted(Exception):
+    pass
+
+def approved_variants(category, base):
+    if category.startswith('pressure:'):
+        return [base, 'Der Messwert lautet: '+base.removeprefix('Der aktuelle Prüfdruck beträgt '), 'Aktuell werden '+base.removeprefix('Der aktuelle Prüfdruck beträgt ').removesuffix('.')+' angezeigt.']
+    return [base, *APPROVED_VARIANTS.get(category, [])]
+
+def paraphrase(text, existing, category):
+    # Model output is an index into reviewed phrases, never playable free text.
+    options=[v for v in approved_variants(category,text) if v not in existing]
+    if not options:raise VariantsExhausted('Alle freigegebenen Formulierungen sind bereits im Cache.')
     base=os.getenv('OLLAMA_URL','http://127.0.0.1:11435')
     status['qwen']='working'
-    prompt='Formuliere die vorgegebene Antwort auf Deutsch natürlich um. Behalte alle Aussagen, Zahlen und Einschränkungen exakt bei. Erfinde nichts. Antworte nur mit einer kurzen Antwort ohne Anführungszeichen. Bereits verwendete Formulierungen nicht wiederholen.\nAntwort: '+text+'\nBisher: '+' | '.join(existing[-4:])
     try:
-        r=request_json(base+'/api/chat',{'model':os.getenv('QWEN_MODEL','qwen3.5:2b'),'stream':False,'think':False,'messages':[{'role':'user','content':prompt}],'options':{'num_predict':120,'temperature':.7,'num_ctx':2048,'num_gpu':0,'num_thread':int(os.getenv('CPU_THREADS','4'))}})
-        result=r['message']['content'].strip()
-        if not result or len(result)>1000:raise RuntimeError('Leere oder zu lange Antwortvariante')
+        r=request_json(base+'/api/chat',{
+            'model':os.getenv('QWEN_MODEL','qwen3.5:2b'),'stream':False,'think':False,
+            'format':{'type':'object','properties':{'index':{'type':'integer','enum':list(range(len(options)))}},'required':['index'],'additionalProperties':False},
+            'messages':[{'role':'system','content':'Wähle eine kurze, natürliche Antwort aus der vorgegebenen Liste. Verändere keinen Text. Antworte ausschließlich mit dem JSON-Objekt mit dem gewählten Index.'},
+                        {'role':'user','content':json.dumps({'answers':options},ensure_ascii=False)}],
+            'options':{'num_predict':30,'temperature':.3,'num_ctx':2048,'num_gpu':0,'num_thread':int(os.getenv('CPU_THREADS','4'))}})
+        index=json.loads(r['message']['content'])['index']
+        if type(index) is not int or not 0<=index<len(options):raise RuntimeError('Ungültige Auswahl der Antwortvariante')
         status['qwen']='ready'
-        return result
+        return options[index]
     except Exception as e:
         status['qwen']='error: '+str(e)[:160]
         raise

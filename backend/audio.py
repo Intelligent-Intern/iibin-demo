@@ -22,9 +22,9 @@ BASE = {
 
 def canonical(category):
     if category in BASE:return BASE[category]
+    if category.startswith('pressure:'):
+        return 'Der aktuelle Prüfdruck beträgt '+format(float(category.split(':',1)[1]),'.2f').replace('.',',')+' bar.'
     with db() as c:r=c.execute('SELECT answer FROM faq WHERE id=?',(category,)).fetchone()
-    if not r and category.startswith('pressure:'):
-        with db() as c:r=c.execute('SELECT text AS answer FROM answer_variant WHERE category=? ORDER BY created LIMIT 1',(category,)).fetchone()
     if not r:raise ValueError('Unbekannte Antwortkategorie')
     return r['answer']
 
@@ -55,7 +55,7 @@ def create_variant(category,voice,variation=False,base_text=None):
 def _create_variant(category,voice,variation=False,base_text=None):
     base=base_text if base_text is not None else canonical(category)
     with db() as c:existing=[r['text'] for r in c.execute('SELECT text FROM answer_variant WHERE category=? AND voice_id=?',(category,voice))]
-    text=inference.paraphrase(base,existing) if variation else base
+    text=inference.paraphrase(base,existing,category) if variation else base
     if text in existing:
         if variation:raise RuntimeError('Das Modell hat eine vorhandene Variante wiederholt.')
         with db() as c:return dict(c.execute('SELECT * FROM answer_variant WHERE category=? AND voice_id=? AND text=?',(category,voice,text)).fetchone())
@@ -92,6 +92,8 @@ async def worker():
                 c.execute("UPDATE job SET state='done',detail='' WHERE id=?",(job['id'],))
                 count=c.execute('SELECT COUNT(*) FROM answer_variant WHERE category=? AND voice_id=?',(job['category'],job['voice_id'])).fetchone()[0]
             if count<3:enqueue(job['category'],job['voice_id'])
+        except inference.VariantsExhausted as e:
+            with db() as c:c.execute("UPDATE job SET state='done',detail=? WHERE id=?",(str(e),job['id']))
         except Exception as e:
             with db() as c:c.execute("UPDATE job SET state='error',detail=? WHERE id=?",(str(e)[:400],job['id']))
 

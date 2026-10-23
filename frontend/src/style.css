@@ -7,3 +7,5 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .app-dialog{padding:0;border:0;border-radius:10px;max-width:calc(100vw - 35px);margin:auto}.app-dialog::backdrop{background:#14355755;backdrop-filter:blur(5px)}.app-dialog .modal{box-shadow:none}
+
+.machine-tile{background:#e8eef3;min-height:390px;padding:22px 24px}.machine-tile .tile-top .eyebrow{color:#315c7c}.machine-preview{position:absolute;left:0;top:15px;width:100%;height:calc(100% - 115px);object-fit:contain;pointer-events:none}.machine-tile-bottom{background:#103c69;left:0;right:0;bottom:0;padding:18px 24px}.machine-tile h2{font-size:25px;margin-top:6px;line-height:1.1}.machine-tile .tile-arrow{width:40px;height:40px}.machine-tile-bottom span:not(.tile-arrow){font-size:8px}.machine-tile .tile-top{z-index:3}.machine-preview{mix-blend-mode:multiply}.machine-tile-bottom h2 br{display:none}@media(max-width:780px){.machine-tile{min-height:365px}.machine-preview{height:calc(100% - 95px)}.machine-tile h2{font-size:22px}.machine-tile-bottom{padding:17px 20px}}

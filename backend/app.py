@@ -207,6 +207,9 @@ assets=ROOT/'frontend/dist/assets'
 if assets.exists():app.mount('/assets',StaticFiles(directory=assets),name='assets')
 @app.get('/{path:path}')
 def surface(path:str):
-    index=ROOT/'frontend/dist/index.html'
+    dist=(ROOT/'frontend/dist').resolve()
+    public=(dist/path).resolve()
+    if public.is_relative_to(dist) and public.is_file():return FileResponse(public)
+    index=dist/'index.html'
     if not index.exists():raise HTTPException(503,'Frontend ist noch nicht gebaut.')
     return FileResponse(index)

@@ -89,8 +89,10 @@ ACTIONS = {
     'nav_protocols':'Gespeicherte Prüfprotokolle oder Prüfergebnisse öffnen.',
     'nav_knowledge':'Die FAQ oder Hilfe öffnen.',
     'nav_voice':'Die eigene Stimme aufnehmen oder Stimmenverwaltung öffnen.',
-    'machine_guard_open':'Die Schutzhaube öffnen; Aufforderung oder Meldung, dass sie geöffnet wurde.',
-    'machine_guard_close':'Die Schutzhaube schließen; Aufforderung oder Meldung, dass sie geschlossen wurde.',
+    'machine_guard_open':'Die Schutzhaube oder Schutzklappe öffnen; Aufforderung oder Meldung, dass sie geöffnet wurde.',
+    'machine_close_start':'Kombinierter Befehl: zuerst die Schutzhaube oder Schutzklappe schließen UND anschließend die Prüfung starten, z.B. schließe die Schutzhaube und starte die Prüfung.',
+    'machine_abort':'Die laufende oder pausierte Prüfung abbrechen, stoppen oder beenden. Nicht nur pausieren.',
+    'machine_guard_close':'Nur die Schutzhaube oder Schutzklappe schließen, ohne Startauftrag; Aufforderung oder Meldung, dass sie geschlossen wurde.',
     'machine_insert':'Das Ventil einlegen oder bestätigen, dass es bereits eingelegt ist, z.B. ich habe das Ventil eingelegt. Keine Frage nach einer Anleitung.',
     'machine_remove':'Das Ventil entnehmen oder melden, dass es entnommen wurde.',
     'machine_start':'Die simulierte Druckprüfung jetzt starten.',
@@ -106,7 +108,7 @@ def decide(text):
     with db() as c:faqs=c.execute('SELECT * FROM faq').fetchall()
     criteria={**ACTIONS,**{r['id']:r['question'] for r in faqs}}
     with _lock:
-        result=agent.predict(text,{'intent':{'type':'choice','instructions':'Wähle genau die passende Absicht. Wissensfragen zur Prüfung gehören zur FAQ. Befehle sind konkrete Aufforderungen. Unbekanntes gehört zu fallback.','criteria':criteria}},lang='de')
+        result=agent.predict(text,{'intent':{'type':'choice','instructions':'Wähle genau die passende Absicht. Wissensfragen zur Prüfung gehören zur FAQ. Befehle sind konkrete Aufforderungen. Schließen UND Starten ist machine_close_start; nur Schließen ist machine_guard_close. Abbrechen ist machine_abort, nicht Pause. Unbekanntes gehört zu fallback.','criteria':criteria}},lang='de')
     answer=result.get('answers',result)['intent']
     choice=answer['choice']
     if choice not in criteria:raise RuntimeError('Ungültiges Laya-Ergebnis')

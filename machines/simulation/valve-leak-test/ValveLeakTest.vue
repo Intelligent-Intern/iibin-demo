@@ -35,6 +35,8 @@ function startTest() {
   readings.value = [{ t: 0, p: 0 }]; elapsed.value = 0; pressure.value = 0
   view.value = 'measurement'; lastSample = -1; stage.value = 'filling'; paused.value = false; publish(); return true
 }
+function closeAndStart() { if (running.value || !valveInserted.value) return false; setGuard(false); return startTest() }
+function abortTest() { if (!running.value) return false; resetTest(); return true }
 function pauseTest() { if (!running.value) return false; paused.value = !paused.value; publish(); return true }
 function resetTest() { view.value = 'prepare'; stage.value = 'ready'; elapsed.value = 0; pressure.value = 0; readings.value = []; paused.value = false; publish() }
 function setLeak(value) { if (running.value) return false; leak.value = Boolean(value); resetTest(); return true }
@@ -298,7 +300,7 @@ onBeforeUnmount(() => {
   const geometries=new Set(),materials=new Set();scene?.traverse(n=>{if(n.geometry)geometries.add(n.geometry);if(n.material)(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>materials.add(m))})
   geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());disposableTextures.forEach(t=>t.dispose());renderer?.dispose();renderer?.forceContextLoss();renderer?.domElement.remove()
 })
-defineExpose({startTest,pauseTest,resetTest,setLeak,toggleGuard,setGuard,insertValve,currentState})
+defineExpose({closeAndStart,abortTest,startTest,pauseTest,resetTest,setLeak,toggleGuard,setGuard,insertValve,currentState})
 </script>
 
 <template>

@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from iibin import Schema
 from . import audio, inference, training
 from .speech import SpeechSession
+from .responses import reply
 from .store import ROOT, VAR, db, init, new_thread, delete_thread, add_message
 
 log=logging.getLogger('shopfloor')
@@ -138,51 +139,7 @@ async def handle(packet,send):
         return {'text':await asyncio.to_thread(inference.transcribe,data)}
     if op=='message.send':
         ensure_thread(tid)
-        if len(text)>1000:raise ValueError('Eine Nachricht darf maximal 1.000 Zeichen enthalten.')
-        if not text.strip():raise ValueError('Die Nachricht ist leer.')
-        user_id=add_message(tid,'user',text)
-        await send({'op':'message.accepted','tid':tid,'rows':[{'id':user_id,'kind':'user','text':text}]})
-        started=time.perf_counter();category=await asyncio.to_thread(inference.decide,text)
-        action_category=category
-        dynamic_answer=None
-        context={v['key']:v.get('flag',v.get('number',v.get('text'))) for r in packet.get('rows',[]) if r.get('id')=='machine' for v in r.get('values',[])}
-        guard_open=context.get('guardOpen',True);inserted=context.get('valveInserted',False)
-        running=context.get('stage') in {'filling','settling','measuring'}
-        if category in {'machine_guard_open','machine_guard_close','machine_insert','machine_remove','machine_start','machine_close_start'}:
-            if running:category='machine_blocked_running'
-            elif category in {'machine_start','machine_close_start'} and not inserted:category='machine_blocked_valve'
-            elif category=='machine_start' and guard_open:category='machine_blocked_start_guard'
-            elif category in {'machine_insert','machine_remove'} and not guard_open and inserted!=(category=='machine_insert'):category='machine_blocked_guard'
-            if category.startswith('machine_blocked_'):action_category=''
-        if category=='machine_abort' and not running:category='machine_not_running';action_category=''
-        if category=='machine_pressure':
-            current=context.get('pressure')
-            if isinstance(current,(int,float)) and 0<=current<=7:
-                dynamic_answer='Der aktuelle Prüfdruck beträgt '+format(current,'.2f').replace('.',',')+' bar.'
-                category='pressure:'+format(current,'.2f')
-        voice=audio.active_voice();variant=audio.choose(tid,category,voice)
-        answer=variant['text'] if variant else dynamic_answer or audio.canonical(category)
-        mid=add_message(tid,'assistant',answer,category,variant['id'] if variant else '')
-        actions=[action_category] if action_category.startswith(('nav_','machine_')) else []
-        await send({'op':'message.reply','tid':tid,'text':answer,'actions':actions,'elapsed':(time.perf_counter()-started)*1000,'rows':[{'id':mid,'kind':'assistant','text':answer,'values':values(category=category,audio_id=variant['id'] if variant else '')}]})
-        if not variant:
-            # An unseen variation is created off the request path; never silently replay a used file.
-            try:
-                with db() as c:exists=c.execute('SELECT 1 FROM answer_variant WHERE category=? AND voice_id=?',(category,voice)).fetchone()
-                variant=await asyncio.to_thread(audio.create_variant,category,voice,bool(exists),dynamic_answer)
-                with db() as c:c.execute('UPDATE message SET audio_id=?,text=? WHERE id=?',(variant['id'],variant['text'],mid))
-            except Exception:
-                log.exception('Audio preparation failed')
-                return {'state':'text_only'}
-        # PCM blocks play as they arrive and can be cancelled between any two blocks.
-        with wave.open(variant['path'], 'rb') as wav:
-            if wav.getsampwidth()!=2 or wav.getnchannels()!=1:raise ValueError('PCM16-Mono-Audio erforderlich.')
-            await send({'op':'audio.start','stream':mid,'tid':tid,'rate':wav.getframerate(),'text':variant['text'],'rows':[{'id':mid,'kind':'assistant','text':variant['text'],'values':values(audio_id=variant['id'])}]})
-            while chunk:=wav.readframes(2048):
-                await send({'op':'audio.chunk','stream':mid,'tid':tid,'audio':chunk})
-                await asyncio.sleep(2048/wav.getframerate())
-        await send({'op':'audio.end','stream':mid,'tid':tid})
-        return {'state':'done'}
+        return await reply(packet,send)
     raise ValueError('Operation nicht implementiert')
 
 

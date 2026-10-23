@@ -33,7 +33,7 @@ export function receiveAudio(frame){
   return
  }
  if(!output||output.id!==frame.stream)return
- if(frame.op==='audio.end'){output.ended=true;finishOutput();return}
+ if(frame.op==='audio.end'){output.audioId=data(frame.rows?.[0]||{}).audio_id||output.audioId;output.ended=true;finishOutput();return}
  if(frame.op!=='audio.chunk'||!frame.audio?.length)return
  if(!context){context=new AudioContext();nextTime=context.currentTime+.06}
  const view=new DataView(frame.audio.buffer,frame.audio.byteOffset,frame.audio.byteLength)

@@ -42,8 +42,8 @@ onFrame(frame=>{
   if(pending>=0)state.messages.splice(pending,1,...(frame.rows||[]));else state.messages.push(...(frame.rows||[]))
   refreshThreads().catch(e=>notice(e.message))
  }
- if(frame.op==='message.reply'){
-  if(frame.tid===state.tid)state.messages.push(...(frame.rows||[]))
+ if(['message.reply','message.update','message.done'].includes(frame.op)){
+  if(frame.tid===state.tid)for(const row of frame.rows||[]){const existing=state.messages.find(m=>m.id===row.id);if(existing)Object.assign(existing,row);else state.messages.push(row)}
   for(const action of frame.actions||[])window.dispatchEvent(new CustomEvent('shopfloor-action',{detail:action}))
  }
  if(frame.op.startsWith('audio.')&&frame.tid===state.tid){

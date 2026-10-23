@@ -8,6 +8,7 @@ from . import inference
 from .store import VAR, db
 
 BASE = {
+'thinking':'Einen kleinen Moment, dazu muss ich kurz nachdenken.',
 'greeting':'Hallo! Ich unterstütze dich bei der Ventilprüfung. Was möchtest du wissen oder tun?',
 'fallback':'Ich kann dir bei der Ventilprüfung helfen, Fragen zum Prüfablauf beantworten und Prüfprotokolle öffnen. Was möchtest du tun?',
 'nav_machine':'Ich öffne die Ventilprüfung.', 'nav_dashboard':'Hier ist die Übersicht.',
@@ -89,7 +90,8 @@ def acknowledge(tid,variant):
         v=c.execute('SELECT * FROM answer_variant WHERE id=?',(variant,)).fetchone()
         if not v:raise ValueError('Unbekannte Audiodatei')
         c.execute('INSERT INTO playback(thread_id,variant_id) VALUES(?,?) ON CONFLICT(thread_id,variant_id) DO UPDATE SET created=CURRENT_TIMESTAMP',(tid,variant))
-    enqueue(v['category'],v['voice_id'])
+    with db() as c:known=c.execute('SELECT 1 FROM faq WHERE id=?',(v['category'],)).fetchone()
+    if v['category'] in BASE or known or v['category'].startswith('pressure:'):enqueue(v['category'],v['voice_id'])
 
 
 async def worker():

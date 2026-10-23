@@ -67,24 +67,64 @@ function labelTexture(text, subtext, background = '#e8eef2', ink = '#153146') {
   ctx.font = '34px Arial, sans-serif'; ctx.fillText(subtext, 35, 182)
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; disposableTextures.push(texture); return texture
 }
+// Microscopic surface relief is kept in linear maps; colour remains the actual finish.
+function finishMaps(finish) {
+  const size = 1024, relief = document.createElement('canvas'), rough = document.createElement('canvas')
+  relief.width = rough.width = size; relief.height = rough.height = size
+  const rc = relief.getContext('2d'), qc = rough.getContext('2d')
+  const r = rc.createImageData(size, size), q = qc.createImageData(size, size)
+  let seed = 1729
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296 }
+  const lines = Array.from({ length: size }, () => random())
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const grain = random() - .5, i = (y * size + x) * 4
+    const brushed = finish === 'brushed', rubber = finish === 'rubber'
+    const h = brushed ? 128 + (lines[y] - .5) * 34 + grain * 9 : 128 + grain * (rubber ? 43 : 28)
+    const level = brushed ? 147 + (lines[y] - .5) * 23 + grain * 7 : (rubber ? 206 : 176) + grain * 22
+    for (let c = 0; c < 3; c++) { r.data[i + c] = h; q.data[i + c] = level }
+    r.data[i + 3] = q.data[i + 3] = 255
+  }
+  rc.putImageData(r, 0, 0); qc.putImageData(q, 0, 0)
+  const maps = [relief, rough].map(canvas => {
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+    texture.repeat.set(finish === 'brushed' ? 3 : 9, finish === 'brushed' ? 3 : 9)
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
+    disposableTextures.push(texture); return texture
+  })
+  return { bumpMap: maps[0], roughnessMap: maps[1] }
+}
 function initScene() {
   scene = new THREE.Scene(); scene.background = new THREE.Color('#e8eef3'); scene.fog = new THREE.Fog('#e8eef3', 15, 34)
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25; renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .96; renderer.outputColorSpace = THREE.SRGBColorSpace
   viewport.value.appendChild(renderer.domElement)
   const room = new RoomEnvironment(), generator = new THREE.PMREMGenerator(renderer)
-  const environment = generator.fromScene(room, .04); scene.environment = environment.texture
+  // Long softbox reflections disclose the curvature of machined parts.
+  const softbox = new THREE.Mesh(new THREE.PlaneGeometry(3, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 5, 5), side: THREE.DoubleSide }))
+  softbox.position.set(-4, 3, 2); softbox.lookAt(0, 1.5, 0); room.add(softbox)
+  const rimbox = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 3.2, 3.4), side: THREE.DoubleSide }))
+  rimbox.position.set(4, 2, -3); rimbox.lookAt(0, 1.5, 0); room.add(rimbox)
+  const environment = generator.fromScene(room, .025); scene.environment = environment.texture; scene.environmentIntensity = .8
   disposableTextures.push(environment); room.dispose(); generator.dispose()
   camera = new THREE.PerspectiveCamera(35, 1, .1, 80)
   controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = .075
   controls.minDistance = 4; controls.maxDistance = 15; controls.maxPolarAngle = Math.PI * .48; controls.minPolarAngle = .2
   controls.enablePan = false; resetView()
   const material = (color, metalness = 0, roughness = .4, extras = {}) => new THREE.MeshStandardMaterial({ color, metalness, roughness, ...extras })
-  const alloy = material('#bdcbd5', .92, .27), edge = material('#73889a', .86, .32), dark = material('#173343', .55, .36)
-  const blue = material('#124ddb', .48, .25), brass = material('#b79b52', .85, .25), rubber = material('#152328', .05, .57)
-  const white = material('#e0e9ef', .25, .35), red = material('#d52e26', .18, .32)
-  const glass = new THREE.MeshPhysicalMaterial({ color: '#c2e3ed', metalness: 0, roughness: .08, transmission: .86, thickness: .05, transparent: true, opacity: .23, depthWrite: false, side: THREE.DoubleSide, ior: 1.46 })
+  const brushed = finishMaps('brushed'), coating = finishMaps('coating'), elastomer = finishMaps('rubber')
+  const alloy = new THREE.MeshPhysicalMaterial({ color: '#bfc4c7', metalness: 1, roughness: .48, ...brushed, bumpScale: .0018, anisotropy: .65, anisotropyRotation: Math.PI / 2 })
+  const turned = new THREE.MeshPhysicalMaterial({ color: '#d0d2d1', metalness: 1, roughness: .34, ...brushed, bumpScale: .0012, anisotropy: .8 })
+  const chrome = new THREE.MeshPhysicalMaterial({ color: '#d7dce0', metalness: 1, roughness: .13, envMapIntensity: 1.15 })
+  const edge = material('#8c9295', 1, .52, { ...brushed, bumpScale: .002 })
+  const dark = material('#272d30', .12, .7, { ...coating, bumpScale: .0025 })
+  const blue = new THREE.MeshPhysicalMaterial({ color: '#244766', metalness: .05, roughness: .59, ...coating, bumpScale: .002, clearcoat: .15, clearcoatRoughness: .45 })
+  const brass = new THREE.MeshPhysicalMaterial({ color: '#b99a60', metalness: 1, roughness: .4, ...brushed, bumpScale: .0018, anisotropy: .55 })
+  const rubber = material('#171b1d', 0, .85, { ...elastomer, bumpScale: .0035 })
+  const hose = new THREE.MeshPhysicalMaterial({ color: '#254052', metalness: 0, roughness: .36, clearcoat: .42, clearcoatRoughness: .27 })
+  const white = material('#d2d4d1', .04, .7, { ...coating, bumpScale: .0015 }), red = material('#a72823', 0, .4)
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#f3fcff', metalness: 0, roughness: .07, transmission: .96, thickness: .035, ior: 1.586, attenuationColor: '#a7c4ca', attenuationDistance: 2, clearcoat: 1, clearcoatRoughness: .055, side: THREE.DoubleSide })
   const mesh = (geometry, mat, position = [0, 0, 0], parent = scene) => { const object = new THREE.Mesh(geometry, mat); object.position.set(...position); object.castShadow = mat !== glass; object.receiveShadow = true; parent.add(object); return object }
   const box = (w, h, d, mat, position, parent) => mesh(bevelBox(w, h, d), mat, position, parent)
   const cylinder = (r, h, mat, position, axis = 'y', parent = scene, segments = 48) => {
@@ -106,7 +146,7 @@ function initScene() {
   for (const x of [-1.95, 1.95]) for (const z of [-1.22, 1.22]) bolt(x, 1.085, z)
   // Front service panel, vents, manufacturer plate and physical emergency-stop.
   box(2.6, .45, .04, blue, [-.65, .55, 1.595])
-  const plaque = new THREE.MeshBasicMaterial({ map: labelTexture('VP—01', 'VALVE LEAK TEST / 06 BAR', '#124ddb', '#ffffff') })
+  const plaque = new THREE.MeshBasicMaterial({ map: labelTexture('VP—01', 'VALVE LEAK TEST / 06 BAR', '#244766', '#ffffff') })
   mesh(new THREE.PlaneGeometry(1.55, .52), plaque, [-.7, .56, 1.622])
   for (let i = 0; i < 7; i++) box(.4, .022, .018, rubber, [1.3, .4 + i * .045, 1.601])
   cylinder(.19, .025, material('#f0c847', .2, .4), [1.93, .66, 1.62], 'z')
@@ -123,6 +163,11 @@ function initScene() {
   }
   box(4.06, .16, .16, alloy, [0, 3.61, -.97]); box(3.86, .028, .018, dark, [0, 3.61, -.88])
   box(3.74, 1.35, .06, white, [0, 2.75, -1.03])
+  for (const x of [-1.73, 1.73]) for (const y of [2.22, 3.27]) {
+    cylinder(.027, .014, chrome, [x, y, -.989], 'z')
+    const slot = box(.026, .004, .004, dark, [x, y, -.979]); slot.rotation.z = Math.PI / 4
+  }
+  box(.008, 1.19, .003, edge, [.05, 2.75, -.995])
   // Pneumatic pressure regulator and dial, credible connection layout.
   cylinder(.27, .19, dark, [-1.18, 2.85, -.78], 'z')
   cylinder(.238, .03, alloy, [-1.18, 2.85, -.67], 'z')
@@ -132,6 +177,7 @@ function initScene() {
   dc.font = 'bold 32px Arial'; dc.textAlign = 'center'; dc.fillText('0–6', 128, 170); dc.font = '20px Arial'; dc.fillText('bar', 128, 196)
   const dialMap = new THREE.CanvasTexture(dial); dialMap.colorSpace = THREE.SRGBColorSpace; disposableTextures.push(dialMap)
   mesh(new THREE.CircleGeometry(.218, 64), new THREE.MeshBasicMaterial({ map: dialMap }), [-1.18, 2.85, -.647])
+  cylinder(.221, .018, glass, [-1.18, 2.85, -.62], 'z')
   piston = new THREE.Group(); piston.position.set(-1.18, 2.85, -.639); scene.add(piston)
   const needle = box(.012, .175, .007, red, [0, .058, 0], piston); needle.rotation.z = -.08
   cylinder(.018, .014, dark, [0, 0, .012], 'z', piston)
@@ -141,32 +187,37 @@ function initScene() {
   // Valve body: turned cylindrical housing, hex union nuts and visible seals.
   const shell = new THREE.Group(); shell.name = 'valve-shell'; shell.position.set(0, 1.76, .07); scene.add(shell)
   const lathePoints = [[.0,-.52],[.22,-.52],[.25,-.48],[.25,-.28],[.32,-.24],[.34,-.18],[.34,.18],[.32,.24],[.25,.28],[.25,.48],[.22,.52],[.0,.52]].map(([r,y]) => new THREE.Vector2(r,y))
-  const body = mesh(new THREE.LatheGeometry(lathePoints, 80), alloy, [0, 0, 0], shell); body.rotation.z = Math.PI / 2
+  const body = mesh(new THREE.LatheGeometry(lathePoints, 128), turned, [0, 0, 0], shell); body.rotation.z = Math.PI / 2
   for (const x of [-.37, .37]) { const ring = mesh(new THREE.TorusGeometry(.253, .018, 12, 64), dark, [x, 0, 0], shell); ring.rotation.y = Math.PI / 2 }
   for (const x of [-.63, .63]) {
     cylinder(.245, .22, brass, [x, 1.76, .07], 'x', scene, 6)
-    cylinder(.166, .17, alloy, [x + Math.sign(x) * .16, 1.76, .07], 'x')
+    cylinder(.166, .17, turned, [x + Math.sign(x) * .16, 1.76, .07], 'x')
     for (let i = 0; i < 4; i++) cylinder(.17, .013, edge, [x + Math.sign(x) * (.1 + .027 * i), 1.76, .07], 'x')
     cylinder(.19, .035, rubber, [x + Math.sign(x) * .26, 1.76, .07], 'x')
   }
   // Internal seat, poppet and return spring become visible in section mode.
+  // Closely spaced lathe grooves catch highlights without exaggerated colour noise.
+  for (const direction of [-1, 1]) for (let i = 0; i < 12; i++) {
+    const groove = mesh(new THREE.TorusGeometry(.2505, .0013, 5, 96), edge, [direction * (.285 + i * .015), 0, 0], shell)
+    groove.rotation.y = Math.PI / 2
+  }
   cylinder(.12, .91, brass, [0, 1.76, .07], 'x')
   cylinder(.205, .075, rubber, [.11, 1.76, .07], 'x')
   const springPoints = []; for (let i = 0; i <= 240; i++) { const t = i / 240; springPoints.push([-.3 + t * .43, 1.76 + Math.cos(t * Math.PI * 18) * .15, .07 + Math.sin(t * Math.PI * 18) * .15]) }
   pipe(springPoints, .012, alloy)
   cylinder(.18, .21, brass, [0, 2.05, .07]); box(.46, .38, .43, blue, [0, 2.3, .07]); cylinder(.08, .1, dark, [0, 2.54, .07])
-  const actuatorPlate = new THREE.MeshBasicMaterial({ map: labelTexture('V-014', 'NC / DN 15', '#124ddb', '#ffffff') })
+  const actuatorPlate = new THREE.MeshBasicMaterial({ map: labelTexture('V-014', 'NC / DN 15', '#244766', '#ffffff') })
   mesh(new THREE.PlaneGeometry(.37, .14), actuatorPlate, [0, 2.32, .291])
   for (const x of [-.155, .155]) for (const z of [-.08, .22]) bolt(x, 2.5, z, scene, .024)
   // Locating cradle and guided pneumatic clamping gantry.
   for (const x of [-.4, .4]) { box(.23, .25, .66, edge, [x, 1.35, .07]); box(.25, .055, .56, rubber, [x, 1.49, .07]) }
-  for (const x of [-1.08, 1.08]) { box(.38, .11, .75, edge, [x, 1.3, .07]); cylinder(.065, 1.45, alloy, [x, 2.05, -.26]); bolt(x, 1.365, .3) }
+  for (const x of [-1.08, 1.08]) { box(.38, .11, .75, edge, [x, 1.3, .07]); cylinder(.065, 1.45, chrome, [x, 2.05, -.26]); bolt(x, 1.365, .3) }
   box(2.45, .15, .52, dark, [0, 2.8, -.26]); cylinder(.19, .6, blue, [0, 3.1, -.26]); cylinder(.2, .06, alloy, [0, 3.42, -.26]);
   clamp = new THREE.Group(); scene.add(clamp)
-  cylinder(.07, .39, alloy, [0, 2.6, -.26], 'y', clamp); box(.69, .13, .65, edge, [0, 2.46, -.26], clamp)
+  cylinder(.07, .39, chrome, [0, 2.6, -.26], 'y', clamp); box(.69, .13, .65, edge, [0, 2.46, -.26], clamp)
   for (const x of [-.285, .285]) { box(.1, .35, .12, dark, [x, 2.24, -.1], clamp); box(.12, .1, .16, rubber, [x, 2.04, -.1], clamp) }
   // Flexible polyurethane pneumatic lines with strain relief sleeves.
-  pipe([[-.94,1.76,.07],[-1.35,1.76,.07],[-1.5,1.93,-.17],[-1.52,2.24,-.45],[-1.18,2.23,-.68]], .055, blue)
+  pipe([[-.94,1.76,.07],[-1.35,1.76,.07],[-1.5,1.93,-.17],[-1.52,2.24,-.45],[-1.18,2.23,-.68]], .055, hose)
   pipe([[.94,1.76,.07],[1.45,1.76,.12],[1.63,1.96,-.3],[1.5,2.55,-.75],[.45,2.6,-.83]], .052, rubber)
   for (const x of [-.97, .97]) cylinder(.075, .18, brass, [x, 1.76, .07], 'x')
   flow = pipe([[-1.48,1.9,-.13],[-1.34,1.76,.07],[-.9,1.76,.07],[-.35,1.76,.07],[.3,1.76,.07],[.94,1.76,.07],[1.4,1.78,.1]], .025, new THREE.MeshBasicMaterial({ color: '#36d6ff', transparent: true, opacity: 0, depthTest: false }))
@@ -182,11 +233,11 @@ function initScene() {
   // Thin task light under crossbeam and status strip, no decorative status dots.
   lightRing = new THREE.MeshStandardMaterial({ color: '#25b6c7', emissive: '#16a6be', emissiveIntensity: .6 })
   box(3.68, .018, .045, lightRing, [0, 3.5, -.83])
-  const taskLight = new THREE.PointLight('#ddf5ff', 10, 4, 2); taskLight.position.set(0, 3.3, .3); scene.add(taskLight)
-  const key = new THREE.DirectionalLight('#ffffff', 4.2); key.position.set(3, 8, 5); key.castShadow = true; key.shadow.mapSize.set(2048,2048)
+  const taskLight = new THREE.PointLight('#f0f5ff', 3, 4, 2); taskLight.position.set(0, 3.3, .3); scene.add(taskLight)
+  const key = new THREE.DirectionalLight('#fff8ef', 2.2); key.position.set(3, 8, 5); key.castShadow = true; key.shadow.mapSize.set(2048,2048)
   key.shadow.camera.left=-6; key.shadow.camera.right=6; key.shadow.camera.top=6; key.shadow.camera.bottom=-6; key.shadow.normalBias=.035; key.shadow.bias=-.0001; scene.add(key)
-  const fill = new THREE.DirectionalLight('#b5dcff', 1.5); fill.position.set(-4, 4, -3); scene.add(fill)
-  scene.add(new THREE.HemisphereLight('#f6fbff','#8d9ba6',1.6))
+  const fill = new THREE.DirectionalLight('#dce8f1', .75); fill.position.set(-4, 4, -3); scene.add(fill)
+  scene.add(new THREE.HemisphereLight('#f6fbff','#747b80',.55))
   const ground = mesh(new THREE.PlaneGeometry(200,200), material('#e8eef3',0,.82), [0,-.055,0]); ground.rotation.x=-Math.PI/2; ground.castShadow=false
   // Leak particles indicate the actual simulated joint during pressure hold.
   const particleGeometry = new THREE.BufferGeometry(); const positions = new Float32Array(40 * 3); particleGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3))

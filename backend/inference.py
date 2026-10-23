@@ -1,4 +1,4 @@
-"""CPU-only speech and typed decisions; model work stays outside the event loop."""
+"""CPU speech workers and CPU/CUDA text generation outside the event loop."""
 import io
 import difflib
 import json
@@ -17,6 +17,7 @@ _stt_lock = threading.Lock()
 agent = None
 recognizer = None
 voices = {}
+devices = {'laya':'cpu','piper':'cpu','whisper':'cpu','qwen':'loading'}
 status = {'laya':'loading', 'piper':'loading', 'whisper':'loading', 'qwen':'loading'}
 
 
@@ -58,6 +59,17 @@ def load_whisper():
     status['whisper']='ready'
 
 
+def refresh_qwen_device():
+    try:
+        running=request_json(os.getenv('OLLAMA_URL','http://127.0.0.1:11435')+'/api/ps',timeout=1)
+        model=os.getenv('QWEN_MODEL','qwen3.5:2b')
+        current=next((item for item in running.get('models',[]) if item.get('name')==model),None)
+        if current is None:devices['qwen']='standby';return
+        vram=current.get('size_vram',0)
+        devices['qwen']='gpu' if vram and vram>=current.get('size',0) else 'hybrid' if vram else 'cpu'
+    except Exception:pass
+
+
 def load_qwen():
     base=os.getenv('OLLAMA_URL','http://127.0.0.1:11435')
     model=os.getenv('QWEN_MODEL','qwen3.5:2b')
@@ -65,7 +77,8 @@ def load_qwen():
         try:
             tags=request_json(base+'/api/tags',timeout=3)
             if any(m.get('name')==model for m in tags.get('models',[])):
-                request_json(base+'/api/generate',{'model':model,'prompt':'','stream':False,'options':{'num_gpu':0,'num_ctx':2048}},timeout=60)
+                request_json(base+'/api/generate',{'model':model,'prompt':'','stream':False,'options':{'num_ctx':2048}},timeout=60)
+                refresh_qwen_device()
                 status['qwen']='ready'
                 return
         except Exception:
@@ -207,7 +220,7 @@ class AnswerStream:
             try:self.response.close()
             except Exception:pass
     def sentences(self):
-        payload={'model':os.getenv('QWEN_MODEL','qwen3.5:2b'),'stream':True,'think':False,'messages':self.messages,'options':{'num_predict':260,'num_ctx':2048,'num_gpu':0,'temperature':.35,'presence_penalty':0,'repeat_penalty':1.05,'num_thread':int(os.getenv('CPU_THREADS','4'))}}
+        payload={'model':os.getenv('QWEN_MODEL','qwen3.5:2b'),'stream':True,'think':False,'messages':self.messages,'options':{'num_predict':260,'num_ctx':2048,'temperature':.35,'presence_penalty':0,'repeat_penalty':1.05,'num_thread':int(os.getenv('CPU_THREADS','4'))}}
         request=urllib.request.Request(os.getenv('OLLAMA_URL','http://127.0.0.1:11435')+'/api/chat',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
         pending='';count=0
         with urllib.request.urlopen(request,timeout=45) as response:

@@ -72,7 +72,9 @@ async def lifespan(app):
 app=FastAPI(lifespan=lifespan)
 
 @app.get('/health')
-def health():return {'status':'ok','transport':'iibin-binary-websocket','models':inference.status,'mode':'local-demo'}
+def health():
+    inference.refresh_qwen_device()
+    return {'status':'ok','transport':'iibin-binary-websocket','models':inference.status,'devices':inference.devices,'mode':'local-demo'}
 
 @app.post('/api/uploads/recording')
 async def upload_recording(file:UploadFile=File(...),voice_id:str=Form(...),text:str=Form(...)):
@@ -101,7 +103,9 @@ async def handle(packet,send):
     op=packet.get('op');tid=packet.get('tid','');text=packet.get('text','')
     if op not in OPERATIONS:raise ValueError('Unbekannte Operation')
     if len(text)>3000:raise ValueError('Die Eingabe ist zu lang.')
-    if op=='bootstrap':return {'rows':[{'id':k,'kind':'model','title':k,'state':v} for k,v in inference.status.items()],'voice':audio.active_voice(),'text':'Lokale Demo · Administrator','actions':list(OPERATIONS)}
+    if op=='bootstrap':
+        await asyncio.to_thread(inference.refresh_qwen_device)
+        return {'rows':[{'id':k,'kind':'model','title':k,'state':v,'values':values(device=inference.devices[k])} for k,v in inference.status.items()],'voice':audio.active_voice(),'text':'Lokale Demo · Administrator','actions':list(OPERATIONS)}
     if op=='threads.list':return {'rows':list_threads()}
     if op=='threads.create':return {'tid':new_thread(),'rows':list_threads()}
     if op=='threads.delete':delete_thread(tid);return {'rows':list_threads()}

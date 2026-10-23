@@ -1,0 +1,14 @@
+# CUDA access for the text model; speech workers keep their existing CPU allocation.
+services:
+  ollama:
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      OLLAMA_LLM_LIBRARY: cuda_v12
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

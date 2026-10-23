@@ -10,7 +10,7 @@ make up
 make down
 ```
 
-Open http://localhost:5206. Docker volumes retain conversations, recordings, models, voices, cached audio and inspection reports across `make down`. First startup downloads the CPU models (Laya multilingual, Whisper tiny, Piper Thorsten and Qwen 3.5 2B). Their status is visible under Administration. Network access is needed for those downloads, not for subsequent inference.
+Open http://localhost:5206. Docker volumes retain conversations, recordings, models, voices, cached audio and inspection reports across `make down`. First startup downloads the local models (Laya multilingual, Whisper tiny, Piper Thorsten and Qwen 3.5 2B). Their status and actual compute device are visible under Administration. Network access is needed for those downloads, not for subsequent inference.
 
 The local demo is bound to loopback and uses an explicit demo administrator identity. Employees are not created here. A production identity-provider connection is not configured.
 
@@ -21,3 +21,7 @@ A custom voice requires your own recordings with matching transcripts. Create a 
 Only uploads use HTTP. All application commands, data, transcriptions and audio responses use schema-defined binary WebSocket frames. The socket accepts both `ws://localhost:5206/` and `ws://localhost:5206/ws`. The wire schema is `shared/frame.json`. The independent JS/Python packages live in sibling repositories; the old non-schema JS codecs are available only under the explicit `/legacy` entry point.
 
 Inspection statistics are read directly from the persisted `protocol` table: total, passed, failed and the latest result. Live state questions use the current simulation state. Machine actions wait for the mounted scene instead of being discarded during initial navigation.
+
+`make up` automatically enables the NVIDIA GPU for Qwen when `nvidia-smi` and Docker’s NVIDIA runtime are available. Use `make up GPU=1` to require GPU access, or `make up GPU=0` for CPU-only operation. The explicit Compose equivalent is `docker compose -f compose.yaml -f compose.gpu.yaml up -d`. Qwen uses Ollama’s automatic GPU offload; Laya, Whisper, Piper and voice training remain CPU workers. GPU use is read from the loaded model’s VRAM allocation, not inferred from the presence of a GPU. The standard `compose.yaml` remains CPU-only.
+
+The GPU override selects the image’s bundled CUDA 12 backend: the automatic CUDA 13 backend stalled on this RTX 4090 Laptop setup. No host driver changes are required.

@@ -1,5 +1,9 @@
 # Lunar Charge Control
 
+[![Watch the Lunar Charge Control demo](https://img.youtube.com/vi/m4Q1ApoithU/hqdefault.jpg)](https://youtu.be/m4Q1ApoithU)
+
+[Watch the Lunar Charge Control demo on YouTube](https://youtu.be/m4Q1ApoithU).
+
 Interactive lunar electrostatics workbench built from the existing IIBIN Shopfloor application. Vue 3, Tailwind, Three.js, a deterministic simulation worker, and a Python/FastAPI backend using binary IIBIN WebSockets. The original valve inspection remains accessible at **/shopfloor** and **/machines/valve-leak-test**.
 
 Clone the three repositories into the same parent directory; the demo uses the sibling codecs directly:

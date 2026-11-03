@@ -44,14 +44,15 @@ def init():
         CREATE TABLE IF NOT EXISTS setting(key TEXT PRIMARY KEY,value TEXT NOT NULL);
         ''')
         for f in json.loads((ROOT/'content/faq.json').read_text()):
-            c.execute('INSERT OR IGNORE INTO faq VALUES(:id,:question,:answer)',f)
-        c.execute("INSERT OR IGNORE INTO voice(id,name,state) VALUES('thorsten','Thorsten','not_installed')")
-        c.execute("INSERT OR IGNORE INTO setting VALUES('active_voice','thorsten')")
+            c.execute('INSERT INTO faq VALUES(:id,:question,:answer) ON CONFLICT(id) DO UPDATE SET question=excluded.question,answer=excluded.answer',f)
+        c.execute("INSERT OR IGNORE INTO voice(id,name,state) VALUES('lessac','Lessac','not_installed')")
+        c.execute("INSERT OR IGNORE INTO setting VALUES('active_voice','lessac')")
+        c.execute("UPDATE setting SET value='lessac' WHERE key='active_voice' AND value='thorsten'")
         c.execute("UPDATE job SET state='queued' WHERE state='running'")
 
 def new_thread():
     tid=str(uuid4())
-    with db() as c:c.execute('INSERT INTO thread(id,title) VALUES(?,?)',(tid,'Neues Gespräch'))
+    with db() as c:c.execute('INSERT INTO thread(id,title) VALUES(?,?)',(tid,'New conversation'))
     return tid
 
 def delete_thread(tid):
@@ -61,5 +62,5 @@ def add_message(tid,role,text,category='',audio_id=''):
     mid=str(uuid4())
     with db() as c:
         c.execute('INSERT INTO message(id,thread_id,role,text,category,audio_id) VALUES(?,?,?,?,?,?)',(mid,tid,role,text,category,audio_id))
-        if role=='user':c.execute("UPDATE thread SET title=? WHERE id=? AND title='Neues Gespräch'",(text[:55],tid))
+        if role=='user':c.execute("UPDATE thread SET title=? WHERE id=? AND title='New conversation'",(text[:55],tid))
     return mid

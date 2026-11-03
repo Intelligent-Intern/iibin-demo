@@ -1,27 +1,62 @@
-# Werkraum — IIBIN Shopfloor
+# Lunar Charge Control
 
-Vue 3 + Tailwind application, FastAPI binary IIBIN WebSocket backend, native C Python codec, Three.js valve leak-test station. Each surface has its own route and a back link to the dashboard. The machine stays alive across route changes so its guard, inserted valve and running inspection are retained. Voice commands can open/close the guard, insert/remove the valve, start or abort the inspection, and combine closing the guard with starting; “Ich habe das Ventil eingelegt” registers insertion. The insertion button moves the specimen into the fixture. Insertion/removal requires an open guard; starting requires an inserted valve and a closed guard; the guard is locked during a running or paused inspection. No application sidebar.
+Interactive lunar electrostatics workbench built from the existing IIBIN Shopfloor application. Vue 3, Tailwind, Three.js, a deterministic simulation worker, and a Python/FastAPI backend using binary IIBIN WebSockets. The original valve inspection remains accessible at **/shopfloor** and **/machines/valve-leak-test**.
 
-From this directory:
+Clone the three repositories into the same parent directory; the demo uses the sibling codecs directly:
 
 ```sh
+mkdir iibin-workspace
+cd iibin-workspace
+git clone https://github.com/Intelligent-Intern/iibin-py.git
+git clone https://github.com/Intelligent-Intern/iibin-js.git
+git clone https://github.com/Intelligent-Intern/iibin-demo.git
+cd iibin-demo
 make build
 make up
-make down
 ```
 
-Open http://localhost:5206. Docker volumes retain conversations, recordings, models, voices, cached audio and inspection reports across `make down`. First startup downloads the local models (Laya multilingual, Whisper tiny, Piper Thorsten and Qwen 3.5 2B). Their status and actual compute device are visible under Administration. Network access is needed for those downloads, not for subsequent inference.
+Open **http://localhost:5206**. Stop with `make down`. The default CPU-only runtime does not load language or speech models. The database volume retains experimental records across restarts. For development without Docker, install `requirements-runtime.txt` and the sibling `iibin-py`, run Uvicorn on port 5207, and run `npm run dev` in `frontend` (port 5206).
 
-The local demo is bound to loopback and uses an explicit demo administrator identity. Employees are not created here. A production identity-provider connection is not configured.
+The overview opens seven separate surfaces: Moon simulation, plasma, triboelectric contact, energy harvesting, electron emission, lander discharge, and the integrated EVA. Each offers editable parameters, scenarios, start/pause/reset, individual time steps, accelerated playback, immediate calculation, measured curves, saved-run comparison, parameter import/export and CSV data export. Changes to parameters take effect when applied or when starting a new run. They do not rewrite an existing saved result.
 
-The microphone button opens a continuous 16 kHz mono PCM16 stream over binary IIBIN WebSocket blocks (100 ms each). Speech segments are transcribed on CPU after 650 ms of silence; sustained speech is segmented after 15 seconds. The microphone stays open across replies and route navigation. Speaking again interrupts playback immediately in the browser and cancels the pending response on the server. The Stop response control does the same without closing the microphone; Mic off closes the input and output. Thread changes, disconnection and leaving the page release the microphone. Echo cancellation and noise suppression are requested from the browser. Whisper tiny processes completed speech segments, not live partial transcripts. Explicit German machine commands are matched deterministically, including close-and-start and abort; paraphrases go to Laya with separate action and FAQ selection and confidence thresholds. Whisper receives machine terminology as recognition context; common guard synonyms and recognition misspellings are normalized. Low-confidence action or FAQ predictions produce a free answer or clarification, never an arbitrary machine action. Machine interlocks are checked independently of intent recognition. Audio replies use Piper and stream cached WAV content as paced PCM blocks into a continuous Web Audio playback queue. Interrupted responses are not registered as fully played. Playback requires an initial user gesture; a visible enable-audio control handles browser restrictions. Playback completion registers the variant against the thread and queues another reviewed Piper variant without delaying the reply. Canonical FAQ variants use reviewed wording from `content/answer-variants.json`; selecting an unused variant is deterministic. Unmatched questions receive a free Qwen answer. Replies begin directly without a thinking announcement; completed sentences are synthesized with three independent, single-thread CPU Piper sessions and played in order with a bounded three-job lookahead. Playback and queued generation remain interruptible; generated reply audio is retained for replay without replacing canonical FAQ wording. Unused reviewed variants take priority. Once all variants have been played in a thread, the least recently played one is reused so voice output remains available. Audio autoplay may require a browser click. The audio cache is shared; thread deletion removes its messages and playback history, not voices or reports.
+In the Moon scene, click the astronaut to move to the suit. Select a component, inspect its construction and open its matching workbench. Camera controls support orbit, pan and zoom; navigation back to the environment stays available. The scene consumes the same simulation state as the charts.
 
-A custom voice requires your own recordings with matching transcripts. Create a voice in Administration → Voices, record at least 20 different sentences, then start training. Piper CPU fine tuning is a real background process, not instant zero-shot cloning. The initial checkpoint is downloaded from the official Rhasspy Piper checkpoint repository on first training. Quality and training duration depend on your dataset. Job failures are visible in Administration → Answer cache; full training output is retained in the data volume.
+### Cinematic presentation
 
-Only uploads use HTTP. All application commands, data, transcriptions and audio responses use schema-defined binary WebSocket frames. The socket accepts both `ws://localhost:5206/` and `ws://localhost:5206/ws`. The wire schema is `shared/frame.json`. The independent JS/Python packages live in sibling repositories; the old non-schema JS codecs are available only under the explicit `/legacy` entry point.
+Open **http://localhost:5206/lcc/moon** and select **Play cinematic presentation**. The scene enters browser fullscreen, holds black for five seconds, then plays the English editorial sequence automatically. There are no player controls or cursor in the fullscreen scene. Escape returns to the interactive workbench. Replay starts a fresh demonstration without changing experiment parameters or saved runs.
 
-Inspection statistics are read directly from the persisted `protocol` table: total, passed, failed and the latest result. Live state questions use the current simulation state. Machine actions wait for the mounted scene instead of being discarded during initial navigation.
+The tour follows the supplied narration timestamps, from the Moon at 0:03 to the closing line at 4:13, with an eleven-second closing hold. Camera chapters inspect the boot electrodes, suit sensors, energy harvester, storage, electron emitter and lander discharge interface. Component callouts have animated leader lines; the spark at 3:00 flashes briefly and is crossed out. English captions carry the supplied script. Narration audio and orchestral music are separate production tracks.
 
-`make up` automatically enables the NVIDIA GPU for Qwen when `nvidia-smi` and Docker’s NVIDIA runtime are available. Use `make up GPU=1` to require GPU access, or `make up GPU=0` for CPU-only operation. The explicit Compose equivalent is `docker compose -f compose.yaml -f compose.gpu.yaml up -d`. Qwen uses Ollama’s automatic GPU offload; Laya, Whisper, Piper and voice training remain CPU workers. GPU use is read from the loaded model’s VRAM allocation, not inferred from the presence of a GPU. The standard `compose.yaml` remains CPU-only.
+The presentation uses a deterministic 120-second EVA calculated by the same simulation engine, with a −100 kV initial suit potential, −10 kV shadow reference and 300 MΩ discharge resistance. The editorial camera clock maps that run to the narration chapters. It pauses ordinary workbench playback. Particle streams distinguish electron collection, ions and photoemission; photoemission disappears in shadow. The emission stream is shown only while the calculated emitter is operating. Terrain, cloth, hardware, optical surfaces, suit assemblies and lander detail are generated locally; no external model or texture download is needed.
 
-The GPU override selects the image’s bundled CUDA 12 backend: the automatic CUDA 13 backend stalled on this RTX 4090 Laptop setup. No host driver changes are required.
+```sh
+node tests/browser-presentation.mjs
+```
+
+This browser check verifies fullscreen and the five-second lead-in against real time, then advances the browser clock to inspect component chapters, spark rejection, the closing shot and restoration of the interactive view. It does not change application state or use a test-only playback path.
+
+The engine uses SI internally, a 20 ms fixed clock, a monotone implicit plasma-current balance, discrete energy-bounded contact events and analytic current-limited RC transfer. Rendering and playback speed do not change the experiment. All chart values are calculated. Spatial field shells and particle markers illustrate the state; they are not a solution of the electromagnetic field equations. Model assumptions, energy sources, charge paths, losses and limits are documented in [the physical model](docs/physical-model.md) and shown in each workbench's **Model & balance** view. [Architecture and integration](docs/architecture.md) records the relationship to the valve station.
+
+Run the scientific and persistence tests:
+
+```sh
+make test
+```
+
+After starting the application, run its automated browser smoke test (local Chrome required):
+
+```sh
+node tests/browser-smoke.mjs
+```
+
+All application data uses the existing `/ws` binary IIBIN connection. New `lunar.runs.*` operations persist immutable, versioned parameter sets and sampled results to SQLite. CSV and parameter files are generated in the browser. The saved records contain client-computed model results, not observations from physical hardware.
+
+Optional existing voice features:
+
+```sh
+make build VOICE=1
+make up VOICE=1           # auto-selects available NVIDIA support for Qwen
+make down VOICE=1
+```
+
+This builds the larger voice image and enables the Ollama profile; initial use downloads the speech/text models. `GPU=0` disables GPU use, `GPU=1` requires the NVIDIA runtime. The voice assistant retains its valve-station command vocabulary; lunar control uses the visible experiment controls. Voice training, threads, audio and the original valve interlocks are described in [the Shopfloor reference](docs/shopfloor.md).

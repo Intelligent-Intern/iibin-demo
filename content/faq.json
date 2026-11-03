@@ -1,12 +1,52 @@
 [
-{"id":"faq_start","question":"Wie starte ich die Prüfung?","answer":"Lege das Ventil ein, spanne es fest und schließe die Schutzhaube. Danach kannst du die Prüfung starten."},
-{"id":"faq_pressure","question":"Wie hoch ist der Prüfdruck?","answer":"Der Sollwert dieses simulierten Prüfstands beträgt sechs bar."},
-{"id":"faq_leak","question":"Wann gilt das Ventil als undicht?","answer":"Wenn der Druck während der Messphase um mehr als null Komma eins bar abfällt, gilt das Ventil als undicht."},
-{"id":"faq_duration","question":"Wie lange dauert eine Prüfung?","answer":"Der verkürzte Prüfzyklus in dieser Simulation dauert ungefähr zehn Sekunden."},
-{"id":"faq_pause","question":"Kann ich die Prüfung anhalten?","answer":"Ja. Mit Pausieren hältst du den simulierten Prüfablauf an. Mit Fortsetzen geht es weiter."},
-{"id":"faq_guard","question":"Warum muss die Schutzhaube geschlossen sein?","answer":"Die geschlossene Schutzhaube gehört zu den Startbedingungen. Bei geöffneter Haube startet die Simulation keine Druckprüfung."},
-{"id":"faq_result","question":"Wo finde ich die Ergebnisse?","answer":"Unter Prüfprotokolle findest du das Ergebnis und den gemessenen Druckabfall zu jedem geprüften Bauteil."},
-{"id":"faq_failure","question":"Was mache ich bei einem undichten Ventil?","answer":"Markiere das Ventil zur Nacharbeit und prüfe die Anschlüsse. Nach der Korrektur kannst du die Prüfung wiederholen."},
-{"id":"faq_method","question":"Wie funktioniert die Dichtheitsprüfung?","answer":"Nach dem Druckaufbau wird die Luftzufuhr geschlossen. Anschließend misst der Prüfstand, wie stark der Druck abfällt."},
-{"id":"faq_commands","question":"Was kann ich per Sprache steuern?","answer":"Du kannst den Ventilprüfstand öffnen, die simulierte Prüfung starten und pausieren sowie Fragen zum Prüfablauf stellen."}
+  {
+    "id": "faq_start",
+    "question": "How do I start the test?",
+    "answer": "Insert and secure the valve, then close the safety guard. You can then start the test."
+  },
+  {
+    "id": "faq_pressure",
+    "question": "What is the test pressure?",
+    "answer": "The target pressure for this simulated test bench is six bar."
+  },
+  {
+    "id": "faq_leak",
+    "question": "When is a valve considered leaky?",
+    "answer": "The valve fails if pressure drops by more than zero point one bar during the measurement phase."
+  },
+  {
+    "id": "faq_duration",
+    "question": "How long does a test take?",
+    "answer": "The shortened test cycle in this simulation takes approximately ten seconds."
+  },
+  {
+    "id": "faq_pause",
+    "question": "Can I pause the test?",
+    "answer": "Yes. Pause stops the simulated test sequence. Resume continues it."
+  },
+  {
+    "id": "faq_guard",
+    "question": "Why must the safety guard be closed?",
+    "answer": "A closed safety guard is a start condition. The simulation cannot start a pressure test with an open guard."
+  },
+  {
+    "id": "faq_result",
+    "question": "Where can I find the results?",
+    "answer": "Inspection reports show the result and measured pressure drop for each tested specimen."
+  },
+  {
+    "id": "faq_failure",
+    "question": "What should I do if a valve leaks?",
+    "answer": "Mark the valve for rework and check the connections. Repeat the test after correcting the fault."
+  },
+  {
+    "id": "faq_method",
+    "question": "How does the leak test work?",
+    "answer": "After pressure builds up, the air supply is closed. The test bench then measures the pressure drop."
+  },
+  {
+    "id": "faq_commands",
+    "question": "What can I control by voice?",
+    "answer": "You can open the valve test bench, start or pause the simulated test, and ask questions about the test procedure."
+  }
 ]

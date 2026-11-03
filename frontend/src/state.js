@@ -1,7 +1,7 @@
 import {reactive} from 'vue'
 import {rpc,onFrame,data} from './transport'
 import {speech,configureSpeech,beginTurn,startVoice,stopVoice,stopOutput,receiveAudio,unlockAudio} from './speech'
-export const state=reactive({models:[],threads:[],tid:localStorage.getItem('werkraum-thread')||'',messages:[],sending:false,notice:'',voice:'thorsten',machine:null,pendingAction:'',lastAudio:null,audioBlocked:false})
+export const state=reactive({models:[],threads:[],tid:localStorage.getItem('werkraum-thread')||'',messages:[],sending:false,notice:'',voice:'lessac',machine:null,pendingAction:'',lastAudio:null,audioBlocked:false})
 export function notice(text){state.notice=text;clearTimeout(notice.timer);notice.timer=setTimeout(()=>state.notice='',5500)}
 export async function bootstrap(){try{const r=await rpc('bootstrap');state.models=r.rows||[];state.voice=r.voice;await refreshThreads()}catch(e){notice(e.message)}}
 export async function refreshThreads(){const r=await rpc('threads.list');state.threads=r.rows||[];if(state.tid&&!state.threads.some(t=>t.id===state.tid)){stopVoice();state.tid='';state.messages=[];localStorage.removeItem('werkraum-thread')}}

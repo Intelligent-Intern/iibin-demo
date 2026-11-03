@@ -1,23 +1,140 @@
 {
-  "greeting": ["Hallo! Wobei kann ich dir an der Ventilprüfung helfen?", "Guten Tag! Möchtest du etwas zur Ventilprüfung wissen oder einen Prüfablauf starten?", "Hallo! Was möchtest du über die Ventilprüfung wissen?"],
-  "fallback": ["Ich unterstütze dich bei der Ventilprüfung. Du kannst Fragen zum Ablauf stellen oder die Prüfprotokolle öffnen. Was möchtest du tun?", "Bei der Ventilprüfung und den Prüfprotokollen kann ich dir helfen. Was brauchst du?", "Du kannst mich zum Prüfablauf befragen oder Prüfprotokolle öffnen lassen. Wobei soll ich dir helfen?"],
-  "nav_machine": ["Ich öffne den Ventilprüfstand.", "Ich zeige dir die Ventilprüfung.", "Hier ist die Ansicht des Ventilprüfstands."],
-  "nav_dashboard": ["Ich öffne die Übersicht.", "Ich zeige dir das Dashboard.", "Hier ist die Übersicht deines Arbeitsplatzes."],
-  "nav_protocols": ["Ich zeige dir die Prüfprotokolle.", "Ich öffne die Übersicht der Prüfprotokolle.", "Hier findest du die gespeicherten Prüfprotokolle."],
-  "nav_knowledge": ["Ich zeige dir die Fragen und Antworten.", "Ich öffne die FAQ zur Ventilprüfung.", "Hier findest du die Antworten zur Bedienung und zum Prüfablauf."],
-  "nav_voice": ["Ich zeige dir die Stimmenverwaltung.", "Ich öffne die Verwaltung deiner Stimmen.", "Hier kannst du deine Stimmen verwalten."],
-  "machine_start": ["Ich sende den Startbefehl an den simulierten Prüfstand.", "Der simulierte Prüfstand erhält jetzt den Startbefehl.", "Ich leite den Befehl zum Starten der Prüfung an den simulierten Prüfstand weiter."],
-  "machine_pause": ["Ich sende den Befehl zum Pausieren oder Fortsetzen an den simulierten Prüfstand.", "Ich leite den Befehl zum Pausieren oder Fortsetzen an den simulierten Prüfstand weiter.", "Der simulierte Prüfstand erhält den Befehl zum Pausieren oder Fortsetzen."],
-  "machine_reset": ["Ich setze den simulierten Prüfablauf zurück.", "Ich bringe die simulierte Prüfung wieder in den Ausgangszustand.", "Die simulierte Prüfung wird zurückgesetzt."],
-  "machine_pressure": ["Den aktuellen Prüfdruck findest du in der Maschinenansicht.", "Die Maschinenansicht zeigt dir den aktuellen Prüfdruck.", "Du kannst den aktuellen Prüfdruck in der Maschinenansicht ablesen."],
-  "faq_start": ["Setze das Ventil ein, spanne es fest und schließe die Schutzhaube. Anschließend kannst du die Prüfung starten.", "Bevor du die Prüfung startest, legst du das Ventil ein, spannst es fest und schließt die Schutzhaube.", "Für den Prüfstart muss das Ventil eingelegt und fest eingespannt sein. Schließe dann die Schutzhaube und starte die Prüfung."],
-  "faq_pressure": ["Der simulierte Prüfstand arbeitet mit einem Sollwert von sechs bar.", "Für diesen simulierten Prüfstand ist ein Prüfdruck von sechs bar vorgesehen.", "Sechs bar sind der Sollwert für den Prüfdruck in dieser Simulation."],
-  "faq_leak": ["Das Ventil gilt als undicht, wenn der Druck in der Messphase um mehr als null Komma eins bar sinkt.", "Ein Druckabfall von mehr als null Komma eins bar während der Messphase bedeutet, dass das Ventil undicht ist.", "Fällt der Druck während der Messphase um mehr als null Komma eins bar, wird das Ventil als undicht bewertet."],
-  "faq_duration": ["In dieser Simulation dauert der verkürzte Prüfzyklus etwa zehn Sekunden.", "Für einen verkürzten Prüfzyklus braucht die Simulation ungefähr zehn Sekunden.", "Die Simulation durchläuft den verkürzten Prüfzyklus in rund zehn Sekunden."],
-  "faq_pause": ["Du kannst den simulierten Prüfablauf mit Pausieren anhalten und mit Fortsetzen wieder aufnehmen.", "Ja, die Simulation lässt sich pausieren. Mit Fortsetzen führst du den Prüfablauf weiter.", "Mit Pausieren hältst du die simulierte Prüfung an. Um weiterzumachen, wählst du Fortsetzen."],
-  "faq_guard": ["Die Schutzhaube muss als Startbedingung geschlossen sein. Mit geöffneter Haube startet die Simulation keine Druckprüfung.", "Eine Druckprüfung kann in der Simulation nur bei geschlossener Schutzhaube starten.", "Bei offener Schutzhaube startet die Simulation keine Druckprüfung. Die geschlossene Haube ist eine Voraussetzung für den Start."],
-  "faq_result": ["In den Prüfprotokollen stehen das Ergebnis und der gemessene Druckabfall für jedes geprüfte Bauteil.", "Öffne die Prüfprotokolle. Dort siehst du für jedes geprüfte Bauteil das Ergebnis und den gemessenen Druckabfall.", "Das Ergebnis jedes geprüften Bauteils findest du zusammen mit dem gemessenen Druckabfall unter Prüfprotokolle."],
-  "faq_failure": ["Kennzeichne das Ventil für die Nacharbeit und kontrolliere die Anschlüsse. Nach der Korrektur kannst du erneut prüfen.", "Bei einem undichten Ventil prüfst du die Anschlüsse und markierst es zur Nacharbeit. Wiederhole die Prüfung nach der Korrektur.", "Markiere das undichte Ventil zur Nacharbeit. Kontrolliere die Anschlüsse und prüfe das Ventil nach der Korrektur noch einmal."],
-  "faq_method": ["Zuerst wird Druck aufgebaut. Dann wird die Luftzufuhr geschlossen und der Druckabfall gemessen.", "Der Prüfstand baut Druck auf und schließt anschließend die Luftzufuhr. Danach misst er den Druckabfall.", "Nach dem Aufbau des Drucks schließt der Prüfstand die Luftzufuhr. Die anschließende Messung erfasst den Druckabfall."],
-  "faq_commands": ["Per Sprache kannst du den Ventilprüfstand öffnen, die simulierte Prüfung starten oder pausieren und Fragen zum Prüfablauf stellen.", "Du kannst Fragen zum Prüfablauf stellen und den Ventilprüfstand öffnen lassen. Auch das Starten und Pausieren der simulierten Prüfung ist per Sprache möglich.", "Mit Sprachbefehlen öffnest du den Ventilprüfstand und startest oder pausierst die simulierte Prüfung. Außerdem kannst du dich nach dem Prüfablauf erkundigen."]
+  "greeting": [
+    "Hello! I can help you with valve testing. What would you like to know or do?",
+    "Hello! How can I help at the valve test bench?",
+    "Hello! Would you like to ask a test question or run a test?"
+  ],
+  "fallback": [
+    "I can help with valve testing, answer questions about the procedure and open inspection reports. What would you like to do?",
+    "You can ask about valve testing or open inspection reports. How can I help?",
+    "I can explain the procedure and show inspection reports. What do you need?"
+  ],
+  "nav_machine": [
+    "Opening the valve test bench.",
+    "Certainly. Opening the valve test bench.",
+    "All right. Opening the valve test bench."
+  ],
+  "nav_dashboard": [
+    "Here is the overview.",
+    "Certainly. Here is the overview.",
+    "All right. Here is the overview."
+  ],
+  "nav_protocols": [
+    "Opening inspection reports.",
+    "Certainly. Opening inspection reports.",
+    "All right. Opening inspection reports."
+  ],
+  "nav_knowledge": [
+    "Opening questions and answers.",
+    "Certainly. Opening questions and answers.",
+    "All right. Opening questions and answers."
+  ],
+  "nav_voice": [
+    "Opening voice management.",
+    "Certainly. Opening voice management.",
+    "All right. Opening voice management."
+  ],
+  "machine_close_start": [
+    "Closing the safety guard and starting the test."
+  ],
+  "machine_abort": [
+    "Aborting the test."
+  ],
+  "machine_not_running": [
+    "No test is currently running."
+  ],
+  "machine_guard_open": [
+    "Sending the command to open the safety guard."
+  ],
+  "machine_guard_close": [
+    "Sending the command to close the safety guard."
+  ],
+  "machine_insert": [
+    "Noted: the valve has been inserted."
+  ],
+  "machine_remove": [
+    "Noted: the valve has been removed."
+  ],
+  "machine_blocked_guard": [
+    "Open the safety guard before inserting or removing the valve."
+  ],
+  "machine_blocked_start_guard": [
+    "Close the safety guard first."
+  ],
+  "machine_blocked_valve": [
+    "Insert a valve before starting the test."
+  ],
+  "machine_blocked_running": [
+    "The test is still running. The safety guard and valve remain locked during the test."
+  ],
+  "machine_start": [
+    "Sending the start command to the simulated test bench.",
+    "Certainly. Sending the start command to the simulated test bench.",
+    "All right. Sending the start command to the simulated test bench."
+  ],
+  "machine_pause": [
+    "Sending the pause or resume command to the simulated test bench.",
+    "Certainly. Sending the pause or resume command to the simulated test bench.",
+    "All right. Sending the pause or resume command to the simulated test bench."
+  ],
+  "machine_reset": [
+    "Resetting the simulated test.",
+    "Certainly. Resetting the simulated test.",
+    "All right. Resetting the simulated test."
+  ],
+  "machine_pressure": [
+    "The machine view shows the current test pressure.",
+    "Certainly. The machine view shows the current test pressure.",
+    "All right. The machine view shows the current test pressure."
+  ],
+  "faq_start": [
+    "Insert and secure the valve, then close the safety guard. You can then start the test.",
+    "For this simulation: Insert and secure the valve, then close the safety guard. You can then start the test.",
+    "The test procedure is as follows. Insert and secure the valve, then close the safety guard. You can then start the test."
+  ],
+  "faq_pressure": [
+    "The target pressure for this simulated test bench is six bar.",
+    "For this simulation: The target pressure for this simulated test bench is six bar.",
+    "The test procedure is as follows. The target pressure for this simulated test bench is six bar."
+  ],
+  "faq_leak": [
+    "The valve fails if pressure drops by more than zero point one bar during the measurement phase.",
+    "For this simulation: The valve fails if pressure drops by more than zero point one bar during the measurement phase.",
+    "The test procedure is as follows. The valve fails if pressure drops by more than zero point one bar during the measurement phase."
+  ],
+  "faq_duration": [
+    "The shortened test cycle in this simulation takes approximately ten seconds.",
+    "For this simulation: The shortened test cycle in this simulation takes approximately ten seconds.",
+    "The test procedure is as follows. The shortened test cycle in this simulation takes approximately ten seconds."
+  ],
+  "faq_pause": [
+    "Yes. Pause stops the simulated test sequence. Resume continues it.",
+    "For this simulation: Yes. Pause stops the simulated test sequence. Resume continues it.",
+    "The test procedure is as follows. Yes. Pause stops the simulated test sequence. Resume continues it."
+  ],
+  "faq_guard": [
+    "A closed safety guard is a start condition. The simulation cannot start a pressure test with an open guard.",
+    "For this simulation: A closed safety guard is a start condition. The simulation cannot start a pressure test with an open guard.",
+    "The test procedure is as follows. A closed safety guard is a start condition. The simulation cannot start a pressure test with an open guard."
+  ],
+  "faq_result": [
+    "Inspection reports show the result and measured pressure drop for each tested specimen.",
+    "For this simulation: Inspection reports show the result and measured pressure drop for each tested specimen.",
+    "The test procedure is as follows. Inspection reports show the result and measured pressure drop for each tested specimen."
+  ],
+  "faq_failure": [
+    "Mark the valve for rework and check the connections. Repeat the test after correcting the fault.",
+    "For this simulation: Mark the valve for rework and check the connections. Repeat the test after correcting the fault.",
+    "The test procedure is as follows. Mark the valve for rework and check the connections. Repeat the test after correcting the fault."
+  ],
+  "faq_method": [
+    "After pressure builds up, the air supply is closed. The test bench then measures the pressure drop.",
+    "For this simulation: After pressure builds up, the air supply is closed. The test bench then measures the pressure drop.",
+    "The test procedure is as follows. After pressure builds up, the air supply is closed. The test bench then measures the pressure drop."
+  ],
+  "faq_commands": [
+    "You can open the valve test bench, start or pause the simulated test, and ask questions about the test procedure.",
+    "For this simulation: You can open the valve test bench, start or pause the simulated test, and ask questions about the test procedure.",
+    "The test procedure is as follows. You can open the valve test bench, start or pause the simulated test, and ask questions about the test procedure."
+  ]
 }

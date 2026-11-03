@@ -48,9 +48,9 @@ class SpeechSession:
         if not self.stream or packet.get('stream') != self.stream: return
         data = packet.get('audio', b'')
         if not data or len(data) > 3200 or len(data) % 2:
-            raise ValueError('Audioblöcke müssen PCM16 mit höchstens 100 ms enthalten.')
+            raise ValueError('Audio blocks must contain at most 100 ms of PCM16 data.')
         turn = packet.get('turn', '')
-        if not turn: raise ValueError('Der Sprachbeitrag fehlt.')
+        if not turn: raise ValueError('The speech segment is missing.')
         if turn != self.turn:
             self.interrupt(turn)
             self.reset()
@@ -97,7 +97,7 @@ class SpeechSession:
             except Exception:
                 import logging
                 logging.getLogger('shopfloor').exception('Speech stream failed')
-                await self.send({'op': 'voice.status', 'stream': stream, 'turn': turn, 'state': 'error', 'error': 'Der Sprachbeitrag konnte nicht verarbeitet werden.'})
+                await self.send({'op': 'voice.status', 'stream': stream, 'turn': turn, 'state': 'error', 'error': 'The speech segment could not be processed.'})
 
     async def close(self):
         self.stream = ''

@@ -37,8 +37,8 @@ def load_laya():
 
 
 def load_piper():
-    target = VAR/'voices/thorsten.onnx'
-    url='https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx'
+    target = VAR/'voices/lessac.onnx'
+    url='https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx'
     for suffix in ['', '.json']:
         path=Path(str(target)+suffix)
         if not path.exists():
@@ -47,8 +47,8 @@ def load_piper():
                 while chunk:=source.read(1024*1024):dest.write(chunk)
             temp.replace(path)
     from piper import PiperVoice
-    voices['thorsten']=PiperVoice.load(str(target), use_cuda=False)
-    with db() as c:c.execute("UPDATE voice SET model=?,config=?,state='ready' WHERE id='thorsten'",(str(target),str(target)+'.json'))
+    voices['lessac']=PiperVoice.load(str(target), use_cuda=False)
+    with db() as c:c.execute("UPDATE voice SET model=?,config=?,state='ready' WHERE id='lessac'",(str(target),str(target)+'.json'))
     status['piper']='ready'
 
 
@@ -84,7 +84,7 @@ def load_qwen():
         except Exception:
             pass
         time.sleep(2)
-    raise RuntimeError('Das Qwen-Modell ist noch nicht verfügbar. Prüfe den Ollama-Download.')
+    raise RuntimeError('The Qwen model is not ready. Check the Ollama download.')
 
 
 def warm_model(name, fn):
@@ -97,30 +97,30 @@ def initialize():
         threading.Thread(target=warm_model,args=(name,fn),daemon=True,name='load-'+name).start()
 
 
-ACTIONS = {
-    'greeting':'Eine reine Begrüßung oder Verabschiedung, z.B. Hallo, Guten Morgen, Tschüss.',
-    'nav_machine':'Den Ventilprüfstand oder die Ventilprüfung öffnen/anzeigen.',
-    'nav_dashboard':'Zur Übersicht oder zum Dashboard zurückgehen.',
-    'nav_protocols':'Gespeicherte Prüfprotokolle oder Prüfergebnisse öffnen.',
-    'nav_knowledge':'Die FAQ oder Hilfe öffnen.',
-    'nav_voice':'Die eigene Stimme aufnehmen oder Stimmenverwaltung öffnen.',
-    'machine_guard_open':'Die Schutzhaube oder Schutzklappe öffnen; Aufforderung oder Meldung, dass sie geöffnet wurde.',
-    'machine_close_start':'Kombinierter Befehl: zuerst die Schutzhaube oder Schutzklappe schließen UND anschließend die Prüfung starten, z.B. schließe die Schutzhaube und starte die Prüfung.',
-    'machine_abort':'Die laufende oder pausierte Prüfung abbrechen, stoppen oder beenden. Nicht nur pausieren.',
-    'machine_guard_close':'Nur die Schutzhaube oder Schutzklappe schließen, ohne Startauftrag; Aufforderung oder Meldung, dass sie geschlossen wurde.',
-    'machine_insert':'Das Ventil einlegen oder bestätigen, dass es bereits eingelegt ist, z.B. ich habe das Ventil eingelegt. Keine Frage nach einer Anleitung.',
-    'machine_remove':'Das Ventil entnehmen oder melden, dass es entnommen wurde.',
-    'machine_start':'Die simulierte Druckprüfung jetzt starten.',
-    'machine_pause':'Die laufende Prüfung pausieren oder fortsetzen.',
-    'machine_reset':'Die simulierte Prüfung zurücksetzen.',
-    'protocol_summary':'Frage zu tatsächlich gespeicherten Prüfprotokollen, Messwerten, Prüfergebnissen oder Statistiken: Anzahl, Fehlerquote, letztes Ergebnis oder Vergleich. Keine allgemeine Frage zum Prüfverfahren und kein Auftrag, die Protokollansicht zu öffnen.',
-    'machine_status':'Den aktuellen Zustand des Prüfstands, der Schutzhaube oder des eingelegten Ventils abfragen.',
-    'machine_pressure':'Den aktuellen Druck des Prüfstands abfragen.',
-    'fallback':'Kein passender Befehl und keine passende FAQ-Frage; unklar oder themenfremd.',
-}
+ACTIONS = {'greeting': 'A greeting or farewell, such as hello, good morning or goodbye.', 'nav_machine': 'Open or show the valve test bench.', 'nav_dashboard': 'Return to the dashboard or overview.', 'nav_protocols': 'Open saved inspection reports or results.', 'nav_knowledge': 'Open FAQ or help.', 'nav_voice': 'Record a custom voice or open voice management.', 'machine_guard_open': 'Open the safety guard or report that it is open.', 'machine_close_start': 'Combined command: close the safety guard and then start the test.', 'machine_abort': 'Abort, stop or end the running or paused test. Not merely pause it.', 'machine_guard_close': 'Close the safety guard without starting a test, or report that it is closed.', 'machine_insert': 'Insert the valve or confirm that it has already been inserted. Not a request for instructions.', 'machine_remove': 'Remove the valve or report that it has been removed.', 'machine_start': 'Start the simulated pressure test now.', 'machine_pause': 'Pause or resume the running test.', 'machine_reset': 'Reset the simulated test.', 'protocol_summary': 'Ask about actual saved inspection reports, measurements, results or statistics: count, failure rate, latest result or comparison. Not general test procedure and not opening the report view.', 'machine_status': 'Ask about the current test bench state, guard or inserted valve.', 'machine_pressure': 'Ask about current test pressure.', 'fallback': 'No matching command or FAQ question; unclear or unrelated input.'}
 
 
 def machine_command(text):
+    english=text.casefold()
+    report=bool(re.search(r'\b(reports?|results?|inspections?|tests?)\b',english))
+    if report and re.search(r'\b(how many|count|total|failed|failure rate|statistics|latest|last result|summary)\b',english):return 'protocol_summary'
+    question=bool(re.search(r'\b(how|why|when|what|explain)\b|\b(can|should|must) i\b',english))
+    if question:return None
+    guard=bool(re.search(r'\b(guard|cover|hood|shield|door)\b',english))
+    test=bool(re.search(r'\b(test|inspection|cycle)\b',english))
+    if (guard or test or 'valve' in english) and re.search(r"\b(do not|dont|never|not|without)\b|don.t",english):return 'fallback'
+    start=test and bool(re.search(r'\b(start|begin|run)\b',english))
+    close=guard and bool(re.search(r'\b(close|closed|shut|lower)\b',english))
+    if (test and re.search(r'\b(abort|cancel|stop|end)\b',english)) or english.strip(' .!?') in {'abort','stop'}:return 'machine_abort'
+    if close and start:return 'machine_close_start'
+    if close:return 'machine_guard_close'
+    if guard and re.search(r'\b(open|opened|raise|lift|unlock)\b',english):return 'machine_guard_open'
+    if 'valve' in english:
+        if re.search(r'\b(insert|inserted|place|placed|load|loaded)\b',english):return 'machine_insert'
+        if re.search(r'\b(remove|removed|take out|unload)\b',english):return 'machine_remove'
+    if test and re.search(r'\b(pause|resume|continue)\b',english):return 'machine_pause'
+    if test and re.search(r'\b(reset|restart)\b',english):return 'machine_reset'
+    if start:return 'machine_start'
     text=text.casefold().replace('ä','ae').replace('ö','oe').replace('ü','ue')
     vocabulary=['schutzhaube','schutzklappe','eingeliegt','eingelegt']
     def repair(match):
@@ -155,7 +155,9 @@ def machine_command(text):
 def faq_terms(text):
     text=text.casefold().replace('ä','ae').replace('ö','oe').replace('ü','ue')
     stop={'wie','was','wann','warum','ist','sind','die','der','das','den','dem','ein','eine','einen','einem','ich','du','es','man','mir','bitte','kann','kannst','muss','soll','wird','werden','dieser','dieses','mein','meine','so','fuer','und','oder','mit','dann','in','von','zu','zum','auf','ab','am','im','hier'}
+    stop|={'how','what','when','why','is','are','the','a','an','i','you','it','to','of','on','for','with','and','or','can','do','does','this','my','me','please'}
     aliases={'lange':'dauer','dauert':'dauer','dauern':'dauer','braucht':'dauer','zeit':'dauer','test':'pruefung','pruefzyklus':'pruefung','ablauf':'verfahren','funktioniert':'verfahren','methode':'verfahren','schutzhaube':'haube','schutzklappe':'haube','geschlossen':'schliessen','schliesse':'schliessen','pruefdruck':'druck','ergebnisse':'ergebnis','protokolle':'ergebnis','undicht':'leck','leckage':'leck','anhalten':'pause','pausieren':'pause','starte':'start','starten':'start'}
+    aliases.update({'testing':'test','inspection':'test','leakage':'leak','leaky':'leak','leaks':'leak','procedure':'method','works':'method','work':'method','long':'duration','takes':'duration','time':'duration','results':'result','reports':'result','stop':'pause','start':'start','starting':'start','closed':'close','closing':'close'})
     return {aliases.get(word,word) for word in re.findall(r'\w+',text) if word not in stop}
 
 
@@ -165,32 +167,32 @@ def relevant_faq(text):
     for row in catalog:
         terms=faq_terms(row['question'])
         overlap=query&terms
-        row['match']=2*len(overlap)/max(1,len(query)+len(terms)) if overlap-{'pruefung','ventil'} else 0
+        row['match']=2*len(overlap)/max(1,len(query)+len(terms)) if overlap-{'pruefung','ventil','test','valve'} else 0
     return sorted(catalog,key=lambda row:row['match'],reverse=True)
 
 
 def decide(text, context=None, history=None):
     command=machine_command(text)
     if command:return command
-    if re.fullmatch(r'\s*(hallo|hi|hey|guten (morgen|tag|abend)|moin|servus|tschuess)[!. ]*',text.casefold()):return 'greeting'
+    if re.fullmatch(r'\s*(hello|hi|hey|good (morning|afternoon|evening)|goodbye|bye|hallo|guten (morgen|tag|abend)|moin|servus|tschuess)[!. ]*',text.casefold()):return 'greeting'
     matches=relevant_faq(text)
     if agent is None:
         return matches[0]['id'] if matches and matches[0]['match']>=.78 else 'fallback'
-    knowledge=bool(re.search(r'\b(was|wer|welche\w*|wie|warum|wann|wieso|weshalb)\b|\b(kann|darf|soll|muss) ich\b',text.casefold()))
+    knowledge=bool(re.search(r'\b(what|who|which|how|why|when|explain)\b|\b(can|should|must) i\b',text.casefold())) or bool(re.search(r'\b(was|wer|welche\w*|wie|warum|wann|wieso|weshalb)\b|\b(kann|darf|soll|muss) ich\b',text.casefold()))
     if agent is not None:
         criteria={k:v for k,v in ACTIONS.items() if k not in {'greeting','fallback'} and (not knowledge or k in {'protocol_summary','machine_status','machine_pressure'})}
-        criteria['none']='Weder Maschinenauftrag noch Abfrage gespeicherter Prüfprotokolle oder des aktuellen Maschinenzustands; allgemeine Wissensfrage, Unterhaltung oder unklarer Text.'
+        criteria['none']='No matching machine command, report query or live-state query; general conversation, unclear or unrelated input.'
         with _lock:
-            prediction=agent.predict(text,{'action':{'type':'choice','instructions':'Erkenne Maschinenaufträge und Fragen zu gespeicherten Prüfprotokollen oder aktuellem Maschinenzustand. Keine Steueraktion bei Anleitungen, Verneinung oder Unterhaltung; ohne passenden Zweig none.','criteria':criteria}},lang='de')
+            prediction=agent.predict(text,{'action':{'type':'choice','instructions':'Recognize machine commands and queries about saved inspection reports or live machine state. Do not execute commands for instructions, negations or conversation. Select none without a matching branch.','criteria':criteria}},lang='en')
         result=prediction.get('answers',prediction)['action'];probabilities=result.get('probabilities',{})
         ranked=sorted(probabilities.values(),reverse=True)
         if result['choice']!='none' and probabilities.get(result['choice'],0)>=.72 and (len(ranked)<2 or ranked[0]-ranked[1]>=.18):return result['choice']
     if matches and matches[0]['match']>=.78:return matches[0]['id']
     with db() as c:faqs=c.execute('SELECT * FROM faq').fetchall()
     criteria={r['id']:r['question']+' '+r['answer'] for r in faqs}
-    criteria['none']='Keine dieser FAQ beantwortet die Frage; allgemeine Unterhaltung, unklarer Text oder anderes Thema.'
+    criteria['none']='None of these FAQs answers the question; general conversation, unclear input or another topic.'
     with _lock:
-        result=agent.predict(text,{'faq':{'type':'choice','instructions':'Wähle eine FAQ nur, wenn sie die konkrete Frage beantwortet. Erfinde keinen Zusammenhang. Sonst none.','criteria':criteria}},lang='de')
+        result=agent.predict(text,{'faq':{'type':'choice','instructions':'Select an FAQ only if it answers the specific question. Do not invent a connection. Otherwise select none.','criteria':criteria}},lang='en')
     answer=result.get('answers',result)['faq'];choice=answer['choice']
     return choice if choice in criteria and choice!='none' and answer.get('probabilities',{}).get(choice,0)>=.65 else 'fallback'
 
@@ -206,7 +208,7 @@ def synthesize_sentence(text, voice_id):
     if models is None:models=_parallel_voice.models={}
     if voice_id not in models:
         with db() as c:record=c.execute("SELECT model,config FROM voice WHERE id=? AND state='ready'",(voice_id,)).fetchone()
-        if not record:raise RuntimeError('Die Antwortstimme ist nicht bereit.')
+        if not record:raise RuntimeError('The response voice is not ready.')
         opts=ort.SessionOptions();opts.intra_op_num_threads=1;opts.inter_op_num_threads=1
         models[voice_id]=PiperVoice(session=ort.InferenceSession(record['model'],sess_options=opts,providers=['CPUExecutionProvider']),config=PiperConfig.from_dict(json.loads(Path(record['config']).read_text())))
     output=io.BytesIO()
@@ -218,7 +220,7 @@ class AnswerStream:
     def __init__(self,text,context,history):
         self.stopped=threading.Event();self.response=None
         self.context_size=4096 if context.get('protocols') else 2048
-        self.messages=[{'role':'system','content':'Du bist Werkraum, ein deutschsprachiger Sprachbot in einem Ventil-Dichtheitsprüfungssystem; allgemeine Fragen und Gespräche beantwortest du ebenfalls. Beantworte die aktuelle Frage direkt und sachlich in ein bis drei kurzen Sätzen ohne Markdown, bei Unklarheit stelle eine kurze Rückfrage. Über diese Maschine, ihre Funktionen und Prüfprotokolle darfst du nur die beigefügten Fakten verwenden; frühere Gesprächsaussagen sind kein Beleg, erfinde weder Eigenschaften, Einschränkungen, Messwerte noch ausgeführte Aktionen. Fehlen Informationen über das System, sage, dass du darüber nicht mehr weißt und andere allgemeine Fragen beantworten kannst. Verwende Fakten nur, wenn sie zur Frage gehören, beachte den angegebenen Datenumfang und behaupte bei Protokollen keine Fehlerursachen, die dort nicht dokumentiert sind.'},*history,{'role':'user','content':json.dumps({'question':text,'facts':context},ensure_ascii=False)}]
+        self.messages=[{'role':'system','content':'You are LCC, an English-speaking voice assistant in a valve leak-testing system. You can also answer general questions. Answer directly and factually in one to three short sentences without Markdown; ask a brief clarification when needed. For this machine, its functions and inspection reports, use only the supplied facts. Prior conversation is not evidence. Do not invent features, restrictions, measurements or actions performed. If system information is missing, say that you do not know more about the machine and can answer other general questions. Use only facts relevant to the current question, respect their stated scope, and do not infer undocumented causes of failed inspections. Always respond in English.'},*history,{'role':'user','content':json.dumps({'question':text,'facts':context},ensure_ascii=False)}]
     def cancel(self):
         self.stopped.set()
         if self.response:
@@ -255,14 +257,14 @@ def synthesize(text, voice_id, output):
     with _voice_lock:
         if voice_id not in voices:
             with db() as c:voice=c.execute('SELECT * FROM voice WHERE id=? AND state=?',(voice_id,'ready')).fetchone()
-            if not voice:raise RuntimeError('Die ausgewählte Stimme ist noch nicht bereit.')
+            if not voice:raise RuntimeError('The selected voice is not ready.')
             from piper import PiperVoice
             voices[voice_id]=PiperVoice.load(voice['model'],use_cuda=False)
         with wave.open(str(output),'wb') as wav:voices[voice_id].synthesize_wav(text,wav)
 
 
 def transcribe(audio):
-    if recognizer is None:raise RuntimeError('Die Spracherkennung wird noch vorbereitet.')
+    if recognizer is None:raise RuntimeError('Speech recognition is still being prepared.')
     import numpy as np
     import subprocess
     try:
@@ -276,7 +278,7 @@ def transcribe(audio):
     if not samples.size:return ''
     with _stt_lock:
         # Supplying samples bypasses the incompatible PyAV file decoder entirely.
-        segments,info=recognizer.transcribe(samples,language='de',beam_size=3,vad_filter=True,condition_on_previous_text=False,initial_prompt='Ventilprüfstand. Schutzhaube öffnen. Schutzhaube schließen. Ventil eingelegt. Prüfung starten, pausieren oder abbrechen. Prüfprotokolle. Fehlgeschlagene Prüfungen.')
+        segments,info=recognizer.transcribe(samples,language='en',beam_size=3,vad_filter=True,condition_on_previous_text=False,initial_prompt='Valve test bench. Open safety guard. Close safety guard. Valve inserted. Start, pause or abort test. Inspection reports. Failed tests.')
         return ' '.join(s.text.strip() for s in segments).strip()
 
 
@@ -287,11 +289,11 @@ class VariantsExhausted(Exception):
 
 def approved_variants(category, base):
     if category.startswith('pressure:'):
-        return [base, 'Der Messwert lautet: '+base.removeprefix('Der aktuelle Prüfdruck beträgt '), 'Aktuell werden '+base.removeprefix('Der aktuelle Prüfdruck beträgt ').removesuffix('.')+' angezeigt.']
+        return [base, 'The measurement is '+base.removeprefix('The current test pressure is '), 'The current reading is '+base.removeprefix('The current test pressure is ')]
     return [base, *APPROVED_VARIANTS.get(category, [])]
 
 def paraphrase(text, existing, category):
     # Model output is an index into reviewed phrases, never playable free text.
     options=[v for v in approved_variants(category,text) if v not in existing]
-    if not options:raise VariantsExhausted('Alle freigegebenen Formulierungen sind bereits im Cache.')
+    if not options:raise VariantsExhausted('All approved phrasings are already cached.')
     return options[0]

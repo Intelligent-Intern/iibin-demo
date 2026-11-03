@@ -23,7 +23,7 @@ def protocols():
         counts=dict(c.execute('SELECT COUNT(*) AS total,COALESCE(SUM(passed),0) AS passed,MIN(created) AS first_created,MAX(created) AS last_created,AVG(pressure) AS average_pressure_bar,AVG(drop_value) AS average_drop_bar,AVG(duration) AS average_duration_seconds FROM protocol').fetchone())
         recent=[dict(row) for row in c.execute('SELECT id,pressure AS pressure_bar,drop_value AS drop_bar,passed,duration AS duration_seconds,created FROM protocol ORDER BY created DESC,rowid DESC LIMIT 20')]
     counts['failed']=counts['total']-counts['passed']
-    return {'all_protocols':counts,'recent_protocols':recent,'scope':'Statistik über alle gespeicherten Prüfungen; Einzelwerte nur für die letzten 20 Prüfungen. Keine dokumentierten Fehlerursachen.'}
+    return {'all_protocols':counts,'recent_protocols':recent,'scope':'Statistics cover all saved inspections; individual measurements cover only the latest 20. No documented fault causes.'}
 
 
 def interlock(category, state):
@@ -60,12 +60,12 @@ class Output:
         await self.send({'op':'message.reply' if first else 'message.update','tid':self.tid,'text':self.text,'rows':[self.row()],'actions':[action] if action else [],'state':'streaming'})
     async def wav(self,content,keep=True):
         with wave.open(io.BytesIO(content),'rb') as wav:
-            if wav.getnchannels()!=1 or wav.getsampwidth()!=2:raise ValueError('PCM16-Mono-Audio erforderlich.')
+            if wav.getnchannels()!=1 or wav.getsampwidth()!=2:raise ValueError('PCM16 mono audio required.')
             rate=wav.getframerate();pcm=wav.readframes(wav.getnframes())
         if not self.rate:
             self.rate=rate
             await self.send({'op':'audio.start','stream':self.mid,'tid':self.tid,'rate':rate,'rows':[self.row()]})
-        if rate!=self.rate:raise ValueError('Die Abtastrate der Satzblöcke muss gleich bleiben.')
+        if rate!=self.rate:raise ValueError('Sentence blocks must use the same sample rate.')
         if keep:self.pcm.append(pcm)
         for offset in range(0,len(pcm),4096):
             chunk=pcm[offset:offset+4096]
@@ -143,7 +143,7 @@ async def sentence_audio(output, source):
 
 async def reply(packet,send):
     tid,text=packet['tid'],packet.get('text','').strip()
-    if not text or len(text)>1000:raise ValueError('Eine Nachricht muss zwischen 1 und 1.000 Zeichen enthalten.')
+    if not text or len(text)>1000:raise ValueError('A message must contain between 1 and 1,000 characters.')
     with db() as c:history=[{'role':r['role'],'content':r['text'][:1000]} for r in reversed(c.execute('SELECT role,text FROM message WHERE thread_id=? ORDER BY rowid DESC LIMIT 2',(tid,)).fetchall())]
     uid=add_message(tid,'user',text)
     await send({'op':'message.accepted','tid':tid,'rows':[{'id':uid,'kind':'user','text':text}]})
@@ -153,10 +153,10 @@ async def reply(packet,send):
         category,action=interlock(await decision,context);output.category=category
         dynamic=None
         if category=='machine_status':
-            states={'ready':'bereit','filling':'im Druckaufbau','settling':'in der Stabilisierung','measuring':'in der Messphase','passed':'bestanden','failed':'fehlgeschlagen'}
-            dynamic='Die Prüfung ist '+states.get(context.get('stage'),'noch nicht geöffnet')+'. Die Schutzhaube ist '+('geöffnet' if context.get('guardOpen',True) else 'geschlossen')+'. Das Ventil ist '+('eingelegt.' if context.get('valveInserted') else 'nicht eingelegt.')
+            states={'ready':'ready','filling':'pressurizing','settling':'stabilizing','measuring':'measuring','passed':'passed','failed':'failed'}
+            dynamic='The test is '+states.get(context.get('stage'),'not open yet')+'. The safety guard is '+('open' if context.get('guardOpen',True) else 'closed')+'. The valve is '+('inserted.' if context.get('valveInserted') else 'not inserted.')
         elif category=='machine_pressure' and isinstance(context.get('pressure'),(int,float)):
-            dynamic='Der aktuelle Prüfdruck beträgt '+format(context['pressure'],'.2f').replace('.',',')+' bar.'
+            dynamic='The current test pressure is '+format(context['pressure'],'.2f')+' bar.'
         if category in {'fallback','protocol_summary'} or category.startswith('faq_') and not audio.choose(tid,category,voice):
             if not output.mid:await output.update('')
             facts={'protocols':protocols()} if category=='protocol_summary' else {}
@@ -177,7 +177,7 @@ async def reply(packet,send):
                 await output.wav(Path(variant['path']).read_bytes())
             else:await sentence_audio(output,static_sentences(answer))
         if not output.text:
-            await sentence_audio(output,static_sentences('Was möchtest du wissen oder am Prüfstand tun?'))
+            await sentence_audio(output,static_sentences('What would you like to know or do at the test bench?'))
         await output.finish()
         return {'state':'done'}
     except Exception:

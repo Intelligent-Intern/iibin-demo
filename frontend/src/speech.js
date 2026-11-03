@@ -73,7 +73,7 @@ export async function startVoice(tid){
   input.connect(node);node.connect(mute);mute.connect(context.destination)
   talking=false;voiced=silence=0;noise=.003;speech.listening=true;speech.phase='listening'
   microphone.getAudioTracks()[0].onended=()=>stopVoice()
- }catch(e){stopVoice();onError(e.name==='NotAllowedError'?'Mikrofonzugriff wurde nicht erlaubt.':e.message||'Spracheingabe nicht verfügbar.')}
+ }catch(e){stopVoice();onError(e.name==='NotAllowedError'?'Microphone access was denied.':e.message||'Voice input unavailable.')}
  finally{if(attempt===startAttempt)speech.starting=false}
 }
 export function stopVoice(){

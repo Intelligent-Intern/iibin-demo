@@ -7,36 +7,15 @@ from uuid import uuid4
 from . import inference
 from .store import VAR, db
 
-BASE = {
-'greeting':'Hallo! Ich unterstütze dich bei der Ventilprüfung. Was möchtest du wissen oder tun?',
-'fallback':'Ich kann dir bei der Ventilprüfung helfen, Fragen zum Prüfablauf beantworten und Prüfprotokolle öffnen. Was möchtest du tun?',
-'nav_machine':'Ich öffne die Ventilprüfung.', 'nav_dashboard':'Hier ist die Übersicht.',
-'nav_protocols':'Ich öffne die Prüfprotokolle.', 'nav_knowledge':'Ich öffne die Fragen und Antworten.',
-'nav_voice':'Ich öffne die Stimmenverwaltung.',
-'machine_close_start':'Ich schließe die Schutzhaube und starte die Prüfung.',
-'machine_abort':'Ich breche die Prüfung ab.',
-'machine_not_running':'Es läuft gerade keine Prüfung.',
-'machine_guard_open':'Ich übergebe den Befehl zum Öffnen der Schutzhaube.',
-'machine_guard_close':'Ich übergebe den Befehl zum Schließen der Schutzhaube.',
-'machine_insert':'Ich übernehme: Das Ventil ist eingelegt.',
-'machine_remove':'Ich übernehme: Das Ventil wurde entnommen.',
-'machine_blocked_guard':'Öffne zuerst die Schutzhaube, um das Ventil einzulegen oder zu entnehmen.',
-'machine_blocked_start_guard':'Die Schutzklappe muss zuerst geschlossen werden.',
-'machine_blocked_valve':'Lege zuerst ein Ventil zur Prüfung ein.',
-'machine_blocked_running':'Die Prüfung läuft noch. Schutzhaube und Ventil bleiben während der Prüfung gesperrt.',
-'machine_start':'Ich übergebe den Startbefehl an den simulierten Prüfstand.',
-'machine_pause':'Ich übergebe den Befehl zum Pausieren oder Fortsetzen an den simulierten Prüfstand.',
-'machine_reset':'Ich setze die simulierte Prüfung zurück.',
-'machine_pressure':'Der aktuelle Prüfdruck wird in der Maschinenansicht angezeigt.',
-}
+BASE = {'greeting': 'Hello! I can help you with valve testing. What would you like to know or do?', 'fallback': 'I can help with valve testing, answer questions about the procedure and open inspection reports. What would you like to do?', 'nav_machine': 'Opening the valve test bench.', 'nav_dashboard': 'Here is the overview.', 'nav_protocols': 'Opening inspection reports.', 'nav_knowledge': 'Opening questions and answers.', 'nav_voice': 'Opening voice management.', 'machine_close_start': 'Closing the safety guard and starting the test.', 'machine_abort': 'Aborting the test.', 'machine_not_running': 'No test is currently running.', 'machine_guard_open': 'Sending the command to open the safety guard.', 'machine_guard_close': 'Sending the command to close the safety guard.', 'machine_insert': 'Noted: the valve has been inserted.', 'machine_remove': 'Noted: the valve has been removed.', 'machine_blocked_guard': 'Open the safety guard before inserting or removing the valve.', 'machine_blocked_start_guard': 'Close the safety guard first.', 'machine_blocked_valve': 'Insert a valve before starting the test.', 'machine_blocked_running': 'The test is still running. The safety guard and valve remain locked during the test.', 'machine_start': 'Sending the start command to the simulated test bench.', 'machine_pause': 'Sending the pause or resume command to the simulated test bench.', 'machine_reset': 'Resetting the simulated test.', 'machine_pressure': 'The machine view shows the current test pressure.'}
 
 
 def canonical(category):
     if category in BASE:return BASE[category]
     if category.startswith('pressure:'):
-        return 'Der aktuelle Prüfdruck beträgt '+format(float(category.split(':',1)[1]),'.2f').replace('.',',')+' bar.'
+        return 'The current test pressure is '+format(float(category.split(':',1)[1]),'.2f')+' bar.'
     with db() as c:r=c.execute('SELECT answer FROM faq WHERE id=?',(category,)).fetchone()
-    if not r:raise ValueError('Unbekannte Antwortkategorie')
+    if not r:raise ValueError('Unknown response category')
     return r['answer']
 
 
@@ -72,7 +51,7 @@ def _create_variant(category,voice,variation=False,base_text=None):
     with db() as c:existing=[r['text'] for r in c.execute('SELECT text FROM answer_variant WHERE category=? AND voice_id=?',(category,voice))]
     text=inference.paraphrase(base,existing,category) if variation else base
     if text in existing:
-        if variation:raise RuntimeError('Das Modell hat eine vorhandene Variante wiederholt.')
+        if variation:raise RuntimeError('The model repeated an existing variant.')
         with db() as c:return dict(c.execute('SELECT * FROM answer_variant WHERE category=? AND voice_id=? AND text=?',(category,voice,text)).fetchone())
     vid=str(uuid4());path=VAR/'audio'/f'{vid}.wav'
     inference.synthesize(text,voice,path)
@@ -87,7 +66,7 @@ def _create_variant(category,voice,variation=False,base_text=None):
 def acknowledge(tid,variant):
     with db() as c:
         v=c.execute('SELECT * FROM answer_variant WHERE id=?',(variant,)).fetchone()
-        if not v:raise ValueError('Unbekannte Audiodatei')
+        if not v:raise ValueError('Unknown audio file')
         c.execute('INSERT INTO playback(thread_id,variant_id) VALUES(?,?) ON CONFLICT(thread_id,variant_id) DO UPDATE SET created=CURRENT_TIMESTAMP',(tid,variant))
     with db() as c:known=c.execute('SELECT 1 FROM faq WHERE id=?',(v['category'],)).fetchone()
     if v['category'] in BASE or known or v['category'].startswith('pressure:'):enqueue(v['category'],v['voice_id'])
@@ -119,5 +98,5 @@ async def seed_cache():
     if inference.status['piper']!='ready':return
     with db() as c:categories=list(BASE)+[r['id'] for r in c.execute('SELECT id FROM faq')]
     for category in categories:
-        with db() as c:present=c.execute('SELECT 1 FROM answer_variant WHERE category=? AND voice_id=?',(category,'thorsten')).fetchone()
-        if not present:enqueue(category,'thorsten','initial')
+        with db() as c:present=c.execute('SELECT 1 FROM answer_variant WHERE category=? AND voice_id=?',(category,'lessac')).fetchone()
+        if not present:enqueue(category,'lessac','initial')

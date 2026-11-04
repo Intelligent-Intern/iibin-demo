@@ -24,7 +24,7 @@ services:
       retries: 5
   ollama:
     profiles: [voice]
-    image: ollama/ollama:0.30.5
+    image: ollama/ollama:0.30.5@sha256:72c60eb9e115e24078864c00274dc067fff2217b105918409856031cca7a7e92
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
       OLLAMA_NUM_PARALLEL: 1

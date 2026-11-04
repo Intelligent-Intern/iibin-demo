@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS web
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS web
 WORKDIR /workspace/iibin-js
 COPY iibin-js/package*.json ./
 RUN npm ci --ignore-scripts
@@ -14,12 +14,12 @@ COPY iibin-demo/content /workspace/iibin-demo/content
 COPY iibin-demo/machines /workspace/iibin-demo/machines
 RUN npm run build
 
-FROM python:3.12-slim-bookworm AS codec
+FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS codec
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 COPY iibin-py /packages/iibin-py
 RUN pip wheel --no-cache-dir --no-deps /packages/iibin-py -w /wheels
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS runtime
 WORKDIR /app
 COPY --from=codec /wheels /wheels
 COPY iibin-demo/requirements-runtime.txt ./requirements.txt
